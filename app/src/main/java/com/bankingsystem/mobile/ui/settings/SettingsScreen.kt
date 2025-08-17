@@ -252,7 +252,6 @@ fun SettingsScreen(
 }
 
 
-/** Big frosted card, subtle border, faint top highlight. Optional colored accent for gradient border/tint. */
 @Composable
 private fun GlassPanel(
     modifier: Modifier = Modifier,
@@ -290,7 +289,6 @@ private fun GlassPanel(
     }
 }
 
-/** Glass group with a small white title, matching the web’s section headers. */
 @Composable
 private fun GlassGroup(
     title: String,

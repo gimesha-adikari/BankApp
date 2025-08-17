@@ -18,7 +18,6 @@ class LockPreferences(private val context: Context) {
         prefs.edit { putBoolean(KEY_LOCK_ENABLED, enabled) }
     }
 
-    // Optional: Save and get PIN (not recommended in plain text, use encryption in real app)
     fun savePin(pin: String) {
         prefs.edit { putString(KEY_LOCK_PIN, pin) }
         setLockEnabled(true)

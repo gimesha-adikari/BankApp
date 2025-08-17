@@ -18,19 +18,9 @@ import androidx.compose.ui.unit.dp
 import com.bankingsystem.mobile.R
 import kotlinx.coroutines.delay
 
-/**
- * A composable function that displays an animated splash screen.
- *
- * The splash screen features a logo that scales in and out before triggering an action
- * after a specified delay.
- *
- * @param onTimeout A lambda function to be invoked when the splash screen animation completes and the delay has passed.
- */
 @Composable
 fun AnimatedSplashScreen(onTimeout: () -> Unit) {
-    // State for the scale animation of the logo
     val scale = remember { Animatable(0.8f) } // Initial scale value
-    // Effect to run when the composable enters the composition
     LaunchedEffect(Unit) {
         scale.animateTo(
             targetValue = 1.2f,
@@ -40,8 +30,8 @@ fun AnimatedSplashScreen(onTimeout: () -> Unit) {
             targetValue = 1.0f,
             animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing)
         )
-        delay(1000) // Wait for 1 second after the animation
-        onTimeout() // Trigger the timeout action
+        delay(1000)
+        onTimeout()
     }
 
     Box(

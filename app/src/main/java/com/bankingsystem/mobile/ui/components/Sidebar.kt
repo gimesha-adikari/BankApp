@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Person
@@ -37,7 +38,8 @@ import androidx.compose.ui.unit.dp
 fun Sidebar(
     menuItems: List<Pair<String, ImageVector>> = listOf(
         "Home" to Icons.Filled.Home,
-        "Accounts" to Icons.Filled.AccountBalance,
+        "My Accounts" to Icons.Filled.AccountBalance,
+        "Open Account" to Icons.Filled.AddCircle,
         "Payments" to Icons.Filled.Payment,
         "Profile" to Icons.Filled.Person,
         "Settings" to Icons.Filled.Settings,
@@ -177,9 +179,16 @@ private fun SidebarHeader(userName: String?) {
             }
             Spacer(Modifier.width(10.dp))
             Column {
-                Text("MyBank", color = cs.onPrimary, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
-                Text(if (userName.isNullOrBlank()) "Secure Banking Panel" else "Hi, $userName",
-                    color = cs.onPrimary.copy(alpha = 0.85f), style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "MyBank",
+                    color = cs.onPrimary,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
+                Text(
+                    if (userName.isNullOrBlank()) "Secure Banking Panel" else "Hi, $userName",
+                    color = cs.onPrimary.copy(alpha = 0.85f),
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
     }

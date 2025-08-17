@@ -3,6 +3,11 @@ package com.bankingsystem.mobile.data.service
 import com.bankingsystem.mobile.data.model.RegisterRequest
 import com.bankingsystem.mobile.data.model.UserProfile
 import com.bankingsystem.mobile.data.model.ValidateTokenResponse
+import com.bankingsystem.mobile.data.model.account.AccountNet
+import com.bankingsystem.mobile.data.model.account.AccountOpenRequest
+import com.bankingsystem.mobile.data.model.account.AccountResponseNet
+import com.bankingsystem.mobile.data.model.account.BranchNet
+import com.bankingsystem.mobile.data.model.account.TransactionNet
 import com.bankingsystem.mobile.data.remote.dto.LoginRequest
 import com.bankingsystem.mobile.data.remote.dto.LoginResponse
 import retrofit2.Response
@@ -10,6 +15,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PUT
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface ApiService {
@@ -52,4 +58,17 @@ interface ApiService {
     suspend fun changePassword(
         @Body body: Map<String, String>
     ): retrofit2.Response<Unit>
+
+    @GET("/api/v1/branches")
+    suspend fun getBranches(): List<BranchNet>
+
+    @POST("/api/v1/accounts")
+    suspend fun openAccount(@Body body: AccountOpenRequest): AccountResponseNet
+
+
+    @GET("/api/v1/accounts/{id}/transactions")
+    suspend fun getAccountTransactions(@Path("id") accountId: String): List<TransactionNet>
+
+    @GET("/api/v1/accounts/my")
+    suspend fun getMyAccounts(): List<AccountNet>
 }

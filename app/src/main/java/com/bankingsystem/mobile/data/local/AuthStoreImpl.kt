@@ -9,8 +9,5 @@ class AuthStoreImpl(
 
     override suspend fun saveAuth(token: String, username: String, role: String) {
         tokenManager.saveToken(token)
-        // Optionally persist username/role:
-        // tokenManager.saveUsername(username)
-        // tokenManager.saveRole(role)
     }
 }

@@ -10,16 +10,11 @@ import com.bankingsystem.mobile.data.storage.TokenManager
 import retrofit2.HttpException
 import java.io.IOException
 
-/**
- * Repository for auth/user actions.
- * Auth header is injected globally by AuthInterceptor.
- */
 class UserRepository(
     private val apiService: ApiService = RetrofitClient.apiService,
     private val tokenManager: TokenManager
 ) {
 
-    /** Login and persist token */
     suspend fun login(username: String, password: String): Result<LoginResponse> {
         return try {
             val response = apiService.loginUser(LoginRequest(username, password))
@@ -41,16 +36,10 @@ class UserRepository(
         }
     }
 
-    /** Logout:
-     *  1) Try server logout (if endpoint available)
-     *  2) Clear local token regardless of server result
-     */
     suspend fun logout() {
         try {
-            // If the endpoint doesn't exist or returns 404/405, it's okay—we still clear locally
             apiService.logout()
         } catch (_: Exception) {
-            // swallow; local clear still happens
         } finally {
             tokenManager.clearToken()
         }

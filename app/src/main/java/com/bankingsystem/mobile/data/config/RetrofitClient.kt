@@ -9,10 +9,6 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
-/**
- * Retrofit singleton with auth + logging interceptors.
- * IMPORTANT: Call init(authStore) before using apiService.
- */
 object RetrofitClient {
     private const val BASE_URL = BuildConfig.API_BASE_URL
 
@@ -26,7 +22,7 @@ object RetrofitClient {
         if (_apiService != null) return
 
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY // set NONE in release if you prefer
+            level = HttpLoggingInterceptor.Level.BODY
         }
 
         val client = OkHttpClient.Builder()

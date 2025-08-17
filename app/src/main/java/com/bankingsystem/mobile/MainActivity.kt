@@ -1,8 +1,11 @@
 package com.bankingsystem.mobile
 
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.annotation.RequiresApi
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bankingsystem.mobile.data.storage.LockPreferences
@@ -16,9 +19,11 @@ import com.bankingsystem.mobile.ui.theme.BankAppTheme
 import com.bankingsystem.mobile.ui.register.RegisterScreen
 import com.bankingsystem.mobile.ui.locker.AppLocker
 
+@ExperimentalMaterial3Api
 class MainActivity : ComponentActivity() {
     private lateinit var lockPreferences: LockPreferences
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         lockPreferences = LockPreferences(this)
@@ -32,18 +37,15 @@ class MainActivity : ComponentActivity() {
                 var lockerAuthenticated by remember { mutableStateOf(false) }
                 var lockEnabled by remember { mutableStateOf(false) }
                 var storedPin by remember { mutableStateOf("") }
-                var showRegister by remember { mutableStateOf(false) } // simple toggle for login/register
+                var showRegister by remember { mutableStateOf(false) }
 
-                // kick off auto-login once
                 LaunchedEffect(Unit) { loginViewModel.autoLogin() }
 
-                // react to login state
                 LaunchedEffect(loginState) {
                     if (loginState is LoginState.Success) {
                         lockEnabled = lockPreferences.isLockEnabled()
                         storedPin = lockPreferences.getPin() ?: ""
                         lockerAuthenticated = !lockEnabled
-                        // once logged in, hide register form if it was shown
                         showRegister = false
                     } else {
                         lockerAuthenticated = false
@@ -70,7 +72,6 @@ class MainActivity : ComponentActivity() {
                                     onAuthenticated = { lockerAuthenticated = true }
                                 )
                             } else {
-                                // ✅ Logged-in main app with Navigation Compose
                                 AppNavHost(
                                     userName = state.username,
                                     onLogout = doLogout
@@ -82,7 +83,6 @@ class MainActivity : ComponentActivity() {
                             if (showRegister) {
                                 RegisterScreen(
                                     onRegisterSuccess = {
-                                        // after successful register, you might want to go to login
                                         showRegister = false
                                     },
                                     onNavigateToLogin = { showRegister = false }

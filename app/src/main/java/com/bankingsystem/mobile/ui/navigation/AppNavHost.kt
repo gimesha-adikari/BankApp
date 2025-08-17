@@ -8,15 +8,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.bankingsystem.mobile.App
 import com.bankingsystem.mobile.data.config.RetrofitClient
 import com.bankingsystem.mobile.data.local.AuthStore
 import com.bankingsystem.mobile.data.local.AuthStoreImpl
 import com.bankingsystem.mobile.data.remote.AuthApiImpl
 import com.bankingsystem.mobile.data.storage.TokenManager
+import com.bankingsystem.mobile.ui.account.AccountTransactionsRoute
+import com.bankingsystem.mobile.ui.account.AccountsRoute
+import com.bankingsystem.mobile.ui.account.MyAccountsRoute
+import com.bankingsystem.mobile.ui.home.BankHomeRoute
 import com.bankingsystem.mobile.ui.home.BankHomeScreen
 import com.bankingsystem.mobile.ui.profile.ProfileRoute
 import com.bankingsystem.mobile.ui.settings.SettingsScreen
@@ -29,14 +35,9 @@ fun AppNavHost(
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as? App
-
-    // Prefer app-scoped store; fall back to local if needed
     val authStore: AuthStore = app?.authStore ?: remember { AuthStoreImpl(TokenManager(context)) }
 
-    // Track whether Retrofit is ready
     var retrofitReady by remember { mutableStateOf(RetrofitClient.isInitialized()) }
-
-    // Initialize Retrofit if needed (runs after first composition)
     LaunchedEffect(authStore) {
         if (!retrofitReady) {
             RetrofitClient.init(authStore = authStore)
@@ -46,25 +47,24 @@ fun AppNavHost(
 
     NavHost(navController = nav, startDestination = Routes.HOME) {
 
+        /* ---------- Home ---------- */
         composable(Routes.HOME) {
-            BankHomeScreen(
+            BankHomeRoute(
                 userName = userName,
                 selectedItem = "Home",
                 onNavigate = { label -> navigateByLabel(nav, label, onLogout) }
             )
         }
 
+        /* ---------- Profile ---------- */
         composable(Routes.PROFILE) {
             if (!retrofitReady) {
-                // Show a quick loader until Retrofit is initialized
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             } else {
-                // Only read apiService AFTER ready is true
                 val apiService = remember { RetrofitClient.apiService }
                 val authApi = remember { AuthApiImpl(apiService) }
-
                 ProfileRoute(
                     api = authApi,
                     store = authStore,
@@ -73,6 +73,7 @@ fun AppNavHost(
             }
         }
 
+        /* ---------- Settings ---------- */
         composable(Routes.SETTINGS) {
             SettingsScreen(
                 onLogout = onLogout,
@@ -80,8 +81,54 @@ fun AppNavHost(
             )
         }
 
-        composable(Routes.ACCOUNTS) { /* TODO */ }
-        composable(Routes.PAYMENTS) { /* TODO */ }
+        /* ---------- Accounts: My list ---------- */
+        composable(Routes.ACCOUNTS_MY) {
+            MyAccountsRoute(
+                userName = userName,
+                onNavigate = { label -> navigateByLabel(nav, label, onLogout) }
+            )
+        }
+
+        /* ---------- Accounts: Open account ---------- */
+        composable(Routes.ACCOUNTS_OPEN) {
+            AccountsRoute(
+                userName = userName,
+                onNavigate = { label -> navigateByLabel(nav, label, onLogout) }
+            )
+        }
+
+        /* ---------- Accounts: Transactions ---------- */
+        composable(
+            route = Routes.ACCOUNT_TX,
+            arguments = listOf(
+                navArgument("accountId") { type = NavType.StringType },
+                navArgument("accNo") {
+                    type = NavType.StringType
+                    defaultValue = ""       // optional
+                }
+            )
+        ) { backStack ->
+            val id    = backStack.arguments?.getString("accountId").orEmpty()
+            val accNo = backStack.arguments?.getString("accNo").orEmpty()
+
+            AccountTransactionsRoute(
+                userName = userName,
+                accountId = id,
+                accountNumber = accNo.ifBlank { null },
+                onNavigate = { label -> navigateByLabel(nav, label, onLogout) },
+                onBack = { nav.navigateUp() }
+            )
+        }
+
+
+        /* ---------- Payments (placeholder) ---------- */
+        composable(Routes.PAYMENTS) {
+            BankHomeScreen(
+                userName = userName,
+                selectedItem = "Payments",
+                onNavigate = { label -> navigateByLabel(nav, label, onLogout) }
+            )
+        }
     }
 }
 
@@ -92,18 +139,30 @@ private fun navigateByLabel(
     label: String,
     onLogout: () -> Unit
 ) {
-    val route = when (label) {
-        "Home"     -> Routes.HOME
-        "Profile"  -> Routes.PROFILE
-        "Settings" -> Routes.SETTINGS
-        "Accounts" -> Routes.ACCOUNTS
-        "Payments" -> Routes.PAYMENTS
-        "Logout"   -> {
-            onLogout()
-            return
+    if (label.contains('/')) {
+        if (label.startsWith("accounts/tx/")) {
+            nav.navigate(label)
+        } else {
+            nav.navigate(label) {
+                popUpTo(nav.graph.startDestinationId) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
         }
-        else -> return
+        return
     }
+
+    val route = when (label) {
+        "Home"         -> Routes.HOME
+        "Profile"      -> Routes.PROFILE
+        "Settings"     -> Routes.SETTINGS
+        "Payments"     -> Routes.PAYMENTS
+        "My Accounts"  -> Routes.ACCOUNTS_MY
+        "Open Account" -> Routes.ACCOUNTS_OPEN
+        "Logout"       -> { onLogout(); return }
+        else           -> return
+    }
+
     nav.navigate(route) {
         popUpTo(nav.graph.startDestinationId) { saveState = true }
         launchSingleTop = true

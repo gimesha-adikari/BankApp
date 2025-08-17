@@ -19,23 +19,18 @@ data class ProfileUiState(
     val errorMessage: String? = null,
     val profile: UserProfile? = null,
 
-    // inline editing
     val editingField: EditableField? = null,
     val tempValue: String = "",
 
-    // username availability
     val isCheckingUsername: Boolean = false,
     val isUsernameAvailable: Boolean? = null,
 
-    // username change flow (password verify)
     val showPasswordDialog: Boolean = false,
     val pendingUsername: String? = null,
 
-    // change password flow
     val showChangePasswordDialog: Boolean = false,
     val isChangingPassword: Boolean = false,
 
-    // UX
     val snackbarMessage: String? = null
 )
 
@@ -67,7 +62,7 @@ class ProfileViewModel(
             _ui.value = _ui.value.copy(isLoading = false, errorMessage = "Not authenticated.")
             return@launch
         }
-        val res = api.getMe(token) // header handled by your interceptor setup (if any)
+        val res = api.getMe(token)
         if (res.isSuccess) {
             val safe = res.getOrNull()?.toSanitized()
             _ui.value = _ui.value.copy(isLoading = false, profile = safe)

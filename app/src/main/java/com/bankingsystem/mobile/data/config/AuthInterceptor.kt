@@ -5,9 +5,6 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
 
-/**
- * Injects "Authorization: Bearer <token>" into every outgoing request if a token exists.
- */
 class AuthInterceptor(
     private val store: AuthStore
 ) : Interceptor {

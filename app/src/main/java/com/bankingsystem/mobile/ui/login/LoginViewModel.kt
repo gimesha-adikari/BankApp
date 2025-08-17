@@ -10,9 +10,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-/**
- * Represents the different states of the login process.
- */
 sealed class LoginState {
     object Idle : LoginState()
     object Loading : LoginState()
@@ -20,9 +17,6 @@ sealed class LoginState {
     data class Error(val error: String) : LoginState()
 }
 
-/**
- * Represents the different states of the forgot password process.
- */
 sealed class ForgotPasswordState {
     object Idle : ForgotPasswordState()
     object Loading : ForgotPasswordState()
@@ -30,12 +24,6 @@ sealed class ForgotPasswordState {
     data class Error(val error: String) : ForgotPasswordState()
 }
 
-/**
- * ViewModel for the Login screen.
- *
- * Handles login / auto-login / forgot password / logout.
- * NOTE: Authorization header is injected globally by AuthInterceptor (via RetrofitClient.init()).
- */
 class LoginViewModel(
     context: Context,
     private val userRepository: UserRepository = UserRepository(
@@ -50,10 +38,6 @@ class LoginViewModel(
     private val _forgotPasswordState = MutableStateFlow<ForgotPasswordState>(ForgotPasswordState.Idle)
     val forgotPasswordState: StateFlow<ForgotPasswordState> = _forgotPasswordState
 
-    /**
-     * Manual login with username/password.
-     * Repository saves the token internally; no need to save it again here.
-     */
     fun loginUser(username: String, password: String) {
         if (username.isBlank() || password.isBlank()) {
             _loginState.value = LoginState.Error("Username or password cannot be blank")
@@ -78,10 +62,6 @@ class LoginViewModel(
         }
     }
 
-    /**
-     * Auto-login by observing the token flow from the repository.
-     * If a token exists, validate it (no-arg; header via interceptor).
-     */
     fun autoLogin() {
         viewModelScope.launch {
             userRepository.tokenFlow.collect { token ->
@@ -97,8 +77,6 @@ class LoginViewModel(
                             )
                         },
                         onFailure = {
-                            // If token invalid, repository will not clear it automatically here.
-                            // We can clear it by calling logout() or expose a clear method on repo if needed.
                             userRepository.logout()
                             _loginState.value = LoginState.Idle
                         }
@@ -110,9 +88,6 @@ class LoginViewModel(
         }
     }
 
-    /**
-     * Forgot password (backend sends email).
-     */
     fun forgotPassword(email: String) {
         if (email.isBlank() || !email.contains("@")) {
             _forgotPasswordState.value = ForgotPasswordState.Error("Invalid email address")
@@ -134,10 +109,6 @@ class LoginViewModel(
         }
     }
 
-    /**
-     * Logout: call repo.logout() (server logout if available, then clear token).
-     * Sets UI state to Idle so UI can navigate to Login screen.
-     */
     fun logoutUser() {
         viewModelScope.launch {
             try { userRepository.logout() } catch (_: Exception) {}
