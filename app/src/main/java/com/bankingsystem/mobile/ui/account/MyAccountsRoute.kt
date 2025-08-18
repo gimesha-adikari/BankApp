@@ -87,7 +87,8 @@ fun MyAccountsRoute(
                 onSetDefault = vm::setDefault,
                 customerMissing = ui.customerMissing,
                 customerMessage = ui.customerMessage,
-                onFixCustomer = { onNavigate("Profile") }
+                onStartKyc = { onNavigate(Routes.KYC) },
+                onFixCustomer = {onNavigate(Routes.PROFILE)}
             )
 
         }

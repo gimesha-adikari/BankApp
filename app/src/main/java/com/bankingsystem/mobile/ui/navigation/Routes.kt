@@ -11,6 +11,9 @@ object Routes {
     const val ACCOUNTS_MY = "accounts/my"
     const val ACCOUNTS_OPEN = "accounts/open"
     const val ACCOUNT_TX    = "accounts/tx/{accountId}?accNo={accNo}"
+
+    const val KYC = "kyc"
+
     fun accountTx(accountId: String, accountNumber: String? = null): String {
         val accNo = accountNumber?.let { Uri.encode(it) } ?: ""
         return "accounts/tx/$accountId?accNo=$accNo"

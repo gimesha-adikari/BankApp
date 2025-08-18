@@ -24,6 +24,7 @@ import com.bankingsystem.mobile.ui.account.AccountsRoute
 import com.bankingsystem.mobile.ui.account.MyAccountsRoute
 import com.bankingsystem.mobile.ui.home.BankHomeRoute
 import com.bankingsystem.mobile.ui.home.BankHomeScreen
+import com.bankingsystem.mobile.ui.kyc.KycRoute
 import com.bankingsystem.mobile.ui.profile.ProfileRoute
 import com.bankingsystem.mobile.ui.settings.SettingsScreen
 
@@ -108,7 +109,7 @@ fun AppNavHost(
                 }
             )
         ) { backStack ->
-            val id    = backStack.arguments?.getString("accountId").orEmpty()
+            val id = backStack.arguments?.getString("accountId").orEmpty()
             val accNo = backStack.arguments?.getString("accNo").orEmpty()
 
             AccountTransactionsRoute(
@@ -117,6 +118,13 @@ fun AppNavHost(
                 accountNumber = accNo.ifBlank { null },
                 onNavigate = { label -> navigateByLabel(nav, label, onLogout) },
                 onBack = { nav.navigateUp() }
+            )
+        }
+
+        composable(Routes.KYC) {
+            KycRoute(
+                userName = userName,
+                onNavigate = { label -> navigateByLabel(nav, label, onLogout) }
             )
         }
 
@@ -153,14 +161,21 @@ private fun navigateByLabel(
     }
 
     val route = when (label) {
-        "Home"         -> Routes.HOME
-        "Profile"      -> Routes.PROFILE
-        "Settings"     -> Routes.SETTINGS
-        "Payments"     -> Routes.PAYMENTS
-        "My Accounts"  -> Routes.ACCOUNTS_MY
+        "Home" -> Routes.HOME
+        "Profile" -> Routes.PROFILE
+        "Settings" -> Routes.SETTINGS
+        "Payments" -> Routes.PAYMENTS
+        "My Accounts" -> Routes.ACCOUNTS_MY
         "Open Account" -> Routes.ACCOUNTS_OPEN
-        "Logout"       -> { onLogout(); return }
-        else           -> return
+        "Verify Identity",
+        Routes.KYC
+            -> Routes.KYC
+
+        "Logout" -> {
+            onLogout(); return
+        }
+
+        else -> return
     }
 
     nav.navigate(route) {

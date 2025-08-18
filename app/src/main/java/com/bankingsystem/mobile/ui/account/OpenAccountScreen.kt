@@ -44,6 +44,9 @@ fun OpenAccountScreen(
     onCancel: () -> Unit,
     onCreateClick: () -> Unit,
 
+    kycRequired: Boolean = false,
+    onStartKyc: () -> Unit = {},
+
     modifier: Modifier = Modifier,
 ) {
     var accountTypeExpanded by remember { mutableStateOf(false) }
@@ -80,6 +83,39 @@ fun OpenAccountScreen(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+
+        /* 🔹 KYC banner (only if kycRequired = true) */
+        if (kycRequired) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFF7C3AED).copy(alpha = 0.18f),
+                tonalElevation = 0.dp,
+                shadowElevation = 8.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Identity verification required",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Verify your identity to open an account.",
+                            color = Color.White.copy(alpha = 0.9f)
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    TextButton(onClick = onStartKyc) { Text("Start KYC") }
+                }
+            }
         }
 
         GlassPanel {
@@ -193,7 +229,6 @@ fun OpenAccountScreen(
             }
         }
 
-        // Actions
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             TextButton(onClick = onCancel, enabled = !submitting) { Text("Cancel") }
             Spacer(Modifier.width(12.dp))

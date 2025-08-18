@@ -32,9 +32,13 @@ fun MyAccountsScreen(
     onAccountClick: (String, String) -> Unit,
     defaultAccountId: String?,
     onSetDefault: (String) -> Unit,
+
+    // 🔹 New: when backend says “customer not found”
     customerMissing: Boolean = false,
     customerMessage: String? = null,
-    onFixCustomer: () -> Unit = {},
+    onStartKyc: () -> Unit = {},     // <— navigate to KYC
+    onFixCustomer: () -> Unit = {},  // <— optionally go to Profile (kept for flexibility)
+
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -43,7 +47,6 @@ fun MyAccountsScreen(
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.AccountBalance, null, tint = Color.White)
             Spacer(Modifier.width(10.dp))
@@ -61,7 +64,8 @@ fun MyAccountsScreen(
             error != null -> ErrorPanel(error, onRefresh)
 
             customerMissing -> CustomerMissingPanel(
-                message = customerMessage ?: "You need a customer profile before you can view or open accounts.",
+                message = customerMessage ?: "We need to verify your identity and create your profile before you can view or open accounts.",
+                onStartKyc = onStartKyc,
                 onGoToProfile = onFixCustomer
             )
 
@@ -166,7 +170,6 @@ private fun AccountCard(
                 Spacer(Modifier.width(8.dp))
                 StatusPill(acc.status)
 
-                // --- Default star ---
                 Spacer(Modifier.width(8.dp))
                 IconButton(onClick = onSetDefault) {
                     Icon(
@@ -255,6 +258,7 @@ private fun EmptyAccounts(onOpenAccount: () -> Unit) {
 @Composable
 private fun CustomerMissingPanel(
     message: String,
+    onStartKyc: () -> Unit,
     onGoToProfile: () -> Unit
 ) {
     Surface(
@@ -267,12 +271,12 @@ private fun CustomerMissingPanel(
         ) {
             Text("Almost there!", color = Color.White, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
-            Text(message, color = Color.White.copy(0.9f))
+            Text(message, color = Color.White.copy(alpha = 0.9f))
             Spacer(Modifier.height(12.dp))
             Button(
-                onClick = onGoToProfile,
+                onClick = onStartKyc,
                 shape = RoundedCornerShape(12.dp)
-            ) { Text("Create Profile") }
+            ) { Text("Start Verification") }
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = onGoToProfile) { Text("Go to Profile") }
         }

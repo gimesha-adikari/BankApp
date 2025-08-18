@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.bankingsystem.mobile.data.repository.AccountRepository
 import com.bankingsystem.mobile.ui.components.FadingAppBackground
 import com.bankingsystem.mobile.ui.components.Sidebar
 import com.bankingsystem.mobile.ui.navigation.Routes
@@ -31,7 +32,8 @@ fun AccountsRoute(
     val config = LocalConfiguration.current
     val isCompact = config.screenWidthDp < 600
 
-    val vm: OpenAccountViewModel = viewModel()
+    val repo = remember { AccountRepository() }
+    val vm: OpenAccountViewModel = viewModel(factory = OpenAccountVMFactory())
     val ui by vm.ui.collectAsState()
     val events = vm.events
     val snackbarHost = remember { SnackbarHostState() }
@@ -52,13 +54,13 @@ fun AccountsRoute(
 
                 is OpenAccountEvent.NeedsCustomerProfile -> {
                     val result = snackbarHost.showSnackbar(
-                        message = "You need a customer profile to open an account.",
-                        actionLabel = "Open Profile",
+                        message = "We need to verify your identity before opening an account.",
+                        actionLabel = "Start KYC",
                         withDismissAction = true,
                         duration = SnackbarDuration.Short
                     )
                     if (result == SnackbarResult.ActionPerformed) {
-                        onNavigate("Profile")
+                        onNavigate(Routes.KYC)
                     }
                 }
 
@@ -83,7 +85,7 @@ fun AccountsRoute(
             drawerContent = {
                 ModalDrawerSheet(drawerContainerColor = Color(0xFF0B0B12)) {
                     Sidebar(
-                        selectedItem = "Accounts",
+                        selectedItem = "Open Accounts",
                         onItemClick = { label ->
                             scope.launch { drawerState.close() }
                             onNavigate(label)
@@ -144,7 +146,7 @@ fun AccountsRoute(
                 shadowElevation = 16.dp
             ) {
                 Sidebar(
-                    selectedItem = "Accounts",
+                    selectedItem = "Open Accounts",
                     onItemClick = onNavigate,
                     userName = userName
                 )

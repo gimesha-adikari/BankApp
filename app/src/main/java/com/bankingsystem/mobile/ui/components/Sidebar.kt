@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationDrawerItem
@@ -41,6 +42,8 @@ fun Sidebar(
         "My Accounts" to Icons.Filled.AccountBalance,
         "Open Account" to Icons.Filled.AddCircle,
         "Payments" to Icons.Filled.Payment,
+        // 🔹 New entry
+        "Verify Identity" to Icons.Filled.Verified,
         "Profile" to Icons.Filled.Person,
         "Settings" to Icons.Filled.Settings,
         "Logout" to Icons.AutoMirrored.Filled.ExitToApp
