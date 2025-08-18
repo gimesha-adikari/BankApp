@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bankingsystem.mobile.ui.components.FadingAppBackground
 import com.bankingsystem.mobile.ui.components.InputField
@@ -22,8 +23,7 @@ fun LoginScreen(
     onNavigateToRegister: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val factory = remember { LoginViewModelFactory(context) }
-    val viewModel: LoginViewModel = viewModel(factory = factory)
+    val viewModel: LoginViewModel = hiltViewModel()
 
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }

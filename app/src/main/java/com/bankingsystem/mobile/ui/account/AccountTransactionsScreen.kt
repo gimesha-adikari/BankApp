@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.bankingsystem.mobile.data.model.account.TransactionNet
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -19,10 +20,11 @@ import java.util.TimeZone
 @Composable
 fun AccountTransactionsScreen(
     accountId: String,
-    vm: AccountTransactionsViewModel,
     accountNumber: String?,
 ) {
+    val vm: AccountTransactionsViewModel = hiltViewModel()
     LaunchedEffect(accountId) { vm.load(accountId) }
+
     val ui by vm.ui.collectAsState()
 
     Column(

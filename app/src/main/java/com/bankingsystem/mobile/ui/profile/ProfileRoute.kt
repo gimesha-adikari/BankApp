@@ -2,18 +2,18 @@ package com.bankingsystem.mobile.ui.profile
 
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.runtime.*
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.bankingsystem.mobile.data.local.AuthStore
-import com.bankingsystem.mobile.data.remote.AuthApi
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @Composable
 fun ProfileRoute(
-    api: AuthApi,
-    store: AuthStore,
-    vm: ProfileViewModel = viewModel(factory = ProfileViewModelFactory(api, store)),
-    onNavigate: (String) -> Unit = {}
+    onNavigate: (String) -> Unit
 ) {
+    val vm: ProfileViewModel = hiltViewModel()
     val ui by vm.ui.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 

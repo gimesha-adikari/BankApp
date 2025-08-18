@@ -6,9 +6,12 @@ import androidx.lifecycle.viewModelScope
 import com.bankingsystem.mobile.data.config.RetrofitClient
 import com.bankingsystem.mobile.data.repository.UserRepository
 import com.bankingsystem.mobile.data.storage.TokenManager
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 sealed class LoginState {
     object Idle : LoginState()
@@ -24,12 +27,9 @@ sealed class ForgotPasswordState {
     data class Error(val error: String) : ForgotPasswordState()
 }
 
-class LoginViewModel(
-    context: Context,
-    private val userRepository: UserRepository = UserRepository(
-        apiService = RetrofitClient.apiService,
-        tokenManager = TokenManager(context)
-    )
+@HiltViewModel
+class LoginViewModel @Inject constructor(
+    private val userRepository: UserRepository
 ) : ViewModel() {
 
     private val _loginState = MutableStateFlow<LoginState>(LoginState.Idle)

@@ -13,6 +13,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 data class ProfileUiState(
     val isLoading: Boolean = true,
@@ -34,7 +35,7 @@ data class ProfileUiState(
     val snackbarMessage: String? = null
 )
 
-class ProfileViewModel(
+class ProfileViewModel @Inject constructor(
     private val api: AuthApi,
     private val store: AuthStore
 ) : ViewModel() {

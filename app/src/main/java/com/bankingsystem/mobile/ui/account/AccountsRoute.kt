@@ -5,18 +5,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.bankingsystem.mobile.data.repository.AccountRepository
+import androidx.hilt.navigation.compose.hiltViewModel   // <-- add this
 import com.bankingsystem.mobile.ui.components.FadingAppBackground
 import com.bankingsystem.mobile.ui.components.Sidebar
 import com.bankingsystem.mobile.ui.navigation.Routes
@@ -32,26 +26,24 @@ fun AccountsRoute(
     val config = LocalConfiguration.current
     val isCompact = config.screenWidthDp < 600
 
-    val repo = remember { AccountRepository() }
-    val vm: OpenAccountViewModel = viewModel(factory = OpenAccountVMFactory())
+    val vm: OpenAccountViewModel = hiltViewModel()
     val ui by vm.ui.collectAsState()
     val events = vm.events
     val snackbarHost = remember { SnackbarHostState() }
-    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(events) {
         events.collect { ev ->
             when (ev) {
                 is OpenAccountEvent.Created -> {
-                    launch {
+                    scope.launch {
                         snackbarHost.showSnackbar(
                             message = "Account ${ev.accountNumber} created",
                             duration = SnackbarDuration.Short
                         )
                     }
-                    onNavigate(Routes.accountTx(ev.accountId,ev.accountNumber))
+                    onNavigate(Routes.accountTx(ev.accountId, ev.accountNumber))
                 }
-
                 is OpenAccountEvent.NeedsCustomerProfile -> {
                     val result = snackbarHost.showSnackbar(
                         message = "We need to verify your identity before opening an account.",
@@ -59,13 +51,10 @@ fun AccountsRoute(
                         withDismissAction = true,
                         duration = SnackbarDuration.Short
                     )
-                    if (result == SnackbarResult.ActionPerformed) {
-                        onNavigate(Routes.KYC)
-                    }
+                    if (result == SnackbarResult.ActionPerformed) onNavigate(Routes.KYC)
                 }
-
                 is OpenAccountEvent.Error -> {
-                    launch {
+                    scope.launch {
                         snackbarHost.showSnackbar(
                             message = ev.message,
                             duration = SnackbarDuration.Short

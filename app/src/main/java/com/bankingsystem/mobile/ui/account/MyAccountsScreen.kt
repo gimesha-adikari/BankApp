@@ -32,12 +32,10 @@ fun MyAccountsScreen(
     onAccountClick: (String, String) -> Unit,
     defaultAccountId: String?,
     onSetDefault: (String) -> Unit,
-
-    // 🔹 New: when backend says “customer not found”
     customerMissing: Boolean = false,
     customerMessage: String? = null,
-    onStartKyc: () -> Unit = {},     // <— navigate to KYC
-    onFixCustomer: () -> Unit = {},  // <— optionally go to Profile (kept for flexibility)
+    onStartKyc: () -> Unit = {},
+    onFixCustomer: () -> Unit = {},
 
     modifier: Modifier = Modifier
 ) {

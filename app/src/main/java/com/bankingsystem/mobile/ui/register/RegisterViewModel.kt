@@ -6,11 +6,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bankingsystem.mobile.data.config.RetrofitClient
 import com.bankingsystem.mobile.data.repository.UserRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 sealed class RegisterState {
     object Idle : RegisterState()
@@ -19,12 +22,9 @@ sealed class RegisterState {
     data class Error(val error: String) : RegisterState()
 }
 
-class RegisterViewModel(
-    context: Context,
-    private val repository: UserRepository = UserRepository(
-        apiService = RetrofitClient.apiService,
-        tokenManager = TokenManager(context)
-    )
+@HiltViewModel
+class RegisterViewModel @Inject constructor(
+    private val repository: UserRepository
 ) : ViewModel() {
 
     private val _usernameAvailable = MutableStateFlow<Boolean?>(null)

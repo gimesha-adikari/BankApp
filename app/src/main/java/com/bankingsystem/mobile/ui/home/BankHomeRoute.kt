@@ -1,10 +1,7 @@
 package com.bankingsystem.mobile.ui.home
 
 import androidx.compose.runtime.*
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.bankingsystem.mobile.data.local.DefaultAccountStore
-import com.bankingsystem.mobile.data.repository.AccountRepository
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @Composable
 fun BankHomeRoute(
@@ -12,13 +9,7 @@ fun BankHomeRoute(
     selectedItem: String = "Home",
     onNavigate: (String) -> Unit
 ) {
-    val context = LocalContext.current
-    val vm: HomeViewModel = viewModel(
-        factory = HomeVMFactory(
-            repo = AccountRepository(),
-            defaults = DefaultAccountStore(context)
-        )
-    )
+    val vm: HomeViewModel = hiltViewModel()
     val ui by vm.ui.collectAsState()
 
     BankHomeScreen(

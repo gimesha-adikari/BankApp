@@ -1,13 +1,15 @@
 package com.bankingsystem.mobile.ui.account
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
 import com.bankingsystem.mobile.data.model.account.TransactionNet
 import com.bankingsystem.mobile.data.repository.AccountRepository
-import kotlinx.coroutines.flow.*
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class AccountTxUiState(
@@ -16,16 +18,10 @@ data class AccountTxUiState(
     val items: List<TransactionNet> = emptyList()
 )
 
-class AccountTransactionsViewModel(
+@HiltViewModel
+class AccountTransactionsViewModel @Inject constructor(
     private val repo: AccountRepository
 ) : ViewModel() {
-
-    companion object {
-        fun factory(repo: AccountRepository = AccountRepository()): ViewModelProvider.Factory =
-            viewModelFactory {
-                initializer { AccountTransactionsViewModel(repo) }
-            }
-    }
 
     private val _ui = MutableStateFlow(AccountTxUiState(loading = true))
     val ui: StateFlow<AccountTxUiState> = _ui.asStateFlow()
@@ -42,12 +38,9 @@ class AccountTransactionsViewModel(
         val id = currentAccountId ?: return
         viewModelScope.launch {
             _ui.update { it.copy(loading = true, error = null) }
-            try {
-                val list = repo.getAccountTransactions(id)
-                _ui.value = AccountTxUiState(loading = false, items = list)
-            } catch (e: Exception) {
-                _ui.value = AccountTxUiState(loading = false, error = e.message ?: "Failed to load transactions")
-            }
+            runCatching { repo.getAccountTransactions(id) }
+                .onSuccess { list -> _ui.value = AccountTxUiState(loading = false, items = list) }
+                .onFailure { e -> _ui.value = AccountTxUiState(loading = false, error = e.message ?: "Failed to load transactions") }
         }
     }
 }

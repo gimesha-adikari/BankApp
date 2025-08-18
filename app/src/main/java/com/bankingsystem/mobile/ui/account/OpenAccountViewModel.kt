@@ -8,6 +8,8 @@ import com.bankingsystem.mobile.data.repository.ApiCallException
 import com.bankingsystem.mobile.data.repository.CustomerMissingException
 import com.bankingsystem.mobile.ui.account.models.AccountType
 import com.bankingsystem.mobile.ui.account.models.BranchOption
+import dagger.hilt.android.lifecycle.HiltViewModel
+import jakarta.inject.Inject
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -17,7 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-data class OpenAccountUiState(
+data class OpenAccountUiState (
     val accountType: AccountType = AccountType.SAVINGS,
     val initialDeposit: String = "",
     val selectedBranchId: String? = null,
@@ -34,7 +36,8 @@ sealed interface OpenAccountEvent {
     data object NeedsCustomerProfile : OpenAccountEvent
 }
 
-class OpenAccountViewModel(
+@HiltViewModel
+class OpenAccountViewModel @Inject constructor(
     private val repo: AccountRepository
 ) : ViewModel() {
 

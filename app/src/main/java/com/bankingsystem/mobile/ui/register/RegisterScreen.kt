@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bankingsystem.mobile.ui.components.FadingAppBackground
 import com.bankingsystem.mobile.ui.components.PasswordTextField
@@ -24,8 +25,7 @@ fun RegisterScreen(
     onNavigateToLogin: () -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val factory = remember { RegisterViewModelFactory(context) }
-    val viewModel: RegisterViewModel = viewModel(factory = factory)
+    val viewModel: RegisterViewModel = hiltViewModel()
 
     var username by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }

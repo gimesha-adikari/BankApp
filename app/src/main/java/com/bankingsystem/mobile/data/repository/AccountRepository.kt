@@ -1,19 +1,19 @@
 package com.bankingsystem.mobile.data.repository
 
-import com.bankingsystem.mobile.data.config.RetrofitClient
 import com.bankingsystem.mobile.data.model.account.AccountNet
 import com.bankingsystem.mobile.data.model.account.AccountOpenRequest
 import com.bankingsystem.mobile.data.model.account.AccountResponseNet
 import com.bankingsystem.mobile.data.model.account.BranchNet
 import com.bankingsystem.mobile.data.model.account.TransactionNet
 import com.bankingsystem.mobile.data.service.ApiService
+import javax.inject.Inject   // <-- use javax, not jakarta
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import retrofit2.HttpException
 
-class AccountRepository(
-    private val api: ApiService = RetrofitClient.apiService
+class AccountRepository @Inject constructor(
+    private val api: ApiService       // <-- no default value here
 ) {
 
     suspend fun getBranches(): List<BranchNet> = ioWrap { api.getBranches() }
@@ -33,12 +33,15 @@ class AccountRepository(
             } catch (e: HttpException) {
                 val code = e.code()
                 val raw = e.response()?.errorBody()?.string().orEmpty()
-                val msg = runCatching { JSONObject(raw).optString("message") }.getOrNull().orEmpty()
+                val msg = runCatching { JSONObject(raw).optString("message") }
+                    .getOrNull().orEmpty()
 
                 if (code == 404 && msg.contains("Customer not found", ignoreCase = true)) {
-                    throw CustomerMissingException("We couldn’t find your customer profile yet. Please create it to view or open accounts.")
+                    throw CustomerMissingException(
+                        "We couldn’t find your customer profile yet. Please create it to view or open accounts."
+                    )
                 }
-                throw ApiCallException(msg.ifBlank { "Network error (${e.code()})" })
+                throw ApiCallException(msg.ifBlank { "Network error ($code)" })
             } catch (e: Exception) {
                 throw ApiCallException(e.message ?: "Unexpected error")
             }

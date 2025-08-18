@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bankingsystem.mobile.data.repository.AccountRepository
 import com.bankingsystem.mobile.ui.components.FadingAppBackground
@@ -33,9 +34,7 @@ fun AccountTransactionsRoute(
     val config = LocalConfiguration.current
     val isCompact = config.screenWidthDp < 600
 
-    val repo = remember { AccountRepository() }
-    val vm: AccountTransactionsViewModel =
-        viewModel(factory = AccountTransactionsViewModel.factory(repo))
+    val vm: AccountTransactionsViewModel = hiltViewModel()
 
     LaunchedEffect(accountId) { vm.load(accountId) }
 
@@ -102,7 +101,6 @@ fun AccountTransactionsRoute(
             AccountTransactionsScreen(
                 accountId = accountId,
                 accountNumber = accountNumber,
-                vm = vm
             )
         }
     }

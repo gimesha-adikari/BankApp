@@ -5,11 +5,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.bankingsystem.mobile.data.local.DefaultAccountStore
 import com.bankingsystem.mobile.data.repository.AccountRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 data class HomeUiState(
     val loading: Boolean = true,
@@ -18,7 +20,8 @@ data class HomeUiState(
     val defaultAccountId: String? = null
 )
 
-class HomeViewModel(
+@HiltViewModel
+class HomeViewModel @Inject constructor(
     private val repo: AccountRepository,
     private val defaults: DefaultAccountStore
 ) : ViewModel() {

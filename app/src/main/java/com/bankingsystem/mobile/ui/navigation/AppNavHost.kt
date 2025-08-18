@@ -2,23 +2,14 @@ package com.bankingsystem.mobile.ui.navigation
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.bankingsystem.mobile.App
-import com.bankingsystem.mobile.data.config.RetrofitClient
-import com.bankingsystem.mobile.data.local.AuthStore
-import com.bankingsystem.mobile.data.local.AuthStoreImpl
-import com.bankingsystem.mobile.data.remote.AuthApiImpl
-import com.bankingsystem.mobile.data.storage.TokenManager
 import com.bankingsystem.mobile.ui.account.AccountTransactionsRoute
 import com.bankingsystem.mobile.ui.account.AccountsRoute
 import com.bankingsystem.mobile.ui.account.MyAccountsRoute
@@ -28,24 +19,13 @@ import com.bankingsystem.mobile.ui.kyc.KycRoute
 import com.bankingsystem.mobile.ui.profile.ProfileRoute
 import com.bankingsystem.mobile.ui.settings.SettingsScreen
 
+@ExperimentalMaterial3Api
 @Composable
 fun AppNavHost(
     userName: String,
     onLogout: () -> Unit,
     nav: NavHostController = rememberNavController()
 ) {
-    val context = LocalContext.current
-    val app = context.applicationContext as? App
-    val authStore: AuthStore = app?.authStore ?: remember { AuthStoreImpl(TokenManager(context)) }
-
-    var retrofitReady by remember { mutableStateOf(RetrofitClient.isInitialized()) }
-    LaunchedEffect(authStore) {
-        if (!retrofitReady) {
-            RetrofitClient.init(authStore = authStore)
-            retrofitReady = true
-        }
-    }
-
     NavHost(navController = nav, startDestination = Routes.HOME) {
 
         /* ---------- Home ---------- */
@@ -59,19 +39,10 @@ fun AppNavHost(
 
         /* ---------- Profile ---------- */
         composable(Routes.PROFILE) {
-            if (!retrofitReady) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else {
-                val apiService = remember { RetrofitClient.apiService }
-                val authApi = remember { AuthApiImpl(apiService) }
-                ProfileRoute(
-                    api = authApi,
-                    store = authStore,
-                    onNavigate = { label -> navigateByLabel(nav, label, onLogout) }
-                )
-            }
+            // Hilt-backed screen; no manual api/store
+            ProfileRoute(
+                onNavigate = { label -> navigateByLabel(nav, label, onLogout) }
+            )
         }
 
         /* ---------- Settings ---------- */
@@ -103,10 +74,7 @@ fun AppNavHost(
             route = Routes.ACCOUNT_TX,
             arguments = listOf(
                 navArgument("accountId") { type = NavType.StringType },
-                navArgument("accNo") {
-                    type = NavType.StringType
-                    defaultValue = ""       // optional
-                }
+                navArgument("accNo") { type = NavType.StringType; defaultValue = "" }
             )
         ) { backStack ->
             val id = backStack.arguments?.getString("accountId").orEmpty()
@@ -121,13 +89,13 @@ fun AppNavHost(
             )
         }
 
+        /* ---------- KYC ---------- */
         composable(Routes.KYC) {
             KycRoute(
                 userName = userName,
                 onNavigate = { label -> navigateByLabel(nav, label, onLogout) }
             )
         }
-
 
         /* ---------- Payments (placeholder) ---------- */
         composable(Routes.PAYMENTS) {
@@ -167,14 +135,8 @@ private fun navigateByLabel(
         "Payments" -> Routes.PAYMENTS
         "My Accounts" -> Routes.ACCOUNTS_MY
         "Open Account" -> Routes.ACCOUNTS_OPEN
-        "Verify Identity",
-        Routes.KYC
-            -> Routes.KYC
-
-        "Logout" -> {
-            onLogout(); return
-        }
-
+        "Verify Identity", Routes.KYC -> Routes.KYC
+        "Logout" -> { onLogout(); return }
         else -> return
     }
 

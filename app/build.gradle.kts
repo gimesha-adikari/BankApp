@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.android.application)  // com.android.application
     alias(libs.plugins.kotlin.android)       // org.jetbrains.kotlin.android
     alias(libs.plugins.kotlin.compose)       // org.jetbrains.kotlin.plugin.compose
+    kotlin("kapt")
+    id("com.google.dagger.hilt.android")
 }
 
 android {
@@ -40,6 +42,9 @@ android {
         compose = true
         buildConfig = true
     }
+    kotlinOptions {
+        freeCompilerArgs = listOf("-XXLanguage:+PropertyParamAnnotationDefaultTargetMode")
+    }
 }
 
 kotlin {
@@ -48,27 +53,30 @@ kotlin {
     }
 }
 dependencies {
-    // Core
+    // Android core dependencies
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.activity.ktx)
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
 
-    // Compose BOM first
+    // Compose UI dependencies
     implementation(platform(libs.compose.bom))
-
-    // Compose (BOM-managed, i.e., NO explicit versions anywhere below)
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.tooling.preview)
-    implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.ui.text.google.fonts)
     debugImplementation(libs.compose.ui.tooling)
-    implementation(libs.compose.material3)         // ✅ single M3 source (BOM picks version)
-    implementation(libs.material.icons.extended)    // ✅ BOM-managed (will fix in toml below)
+    implementation(libs.compose.material3)
     implementation(libs.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
-     implementation(libs.material)
+    // Material design dependencies
+    implementation(libs.material)
+    implementation(libs.material.icons.extended)
 
-    // Networking & others
+    // Network and data storage dependencies
     implementation(libs.retrofit)
     implementation(libs.converter.gson)
     implementation(libs.logging.interceptor)
@@ -77,14 +85,27 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.biometric)
 
-    // Tests
+    // Testing dependencies
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
-    implementation(libs.navigation.compose)
+    // Navigation dependencies
+    implementation(libs.androidx.navigation.compose)
 
-    implementation(libs.ui.text.google.fonts)
+    // Image loading dependencies
+    implementation(libs.coil.compose)
 
+    // Face detection dependencies
+    implementation(libs.face.detection)
+
+    // --- Hilt
+    implementation(libs.hilt.android)
+    kapt(libs.hilt.compiler)
+    implementation(libs.androidx.hilt.navigation.compose)
+
+    implementation(libs.converter.moshi)
+    implementation(libs.moshi.kotlin)
 }
 
+kapt { correctErrorTypes = true }

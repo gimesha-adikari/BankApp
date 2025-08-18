@@ -1,16 +1,14 @@
 package com.bankingsystem.mobile.ui.account
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.bankingsystem.mobile.data.local.DefaultAccountStore
 import com.bankingsystem.mobile.data.repository.AccountRepository
 import com.bankingsystem.mobile.data.repository.CustomerMissingException
 import com.bankingsystem.mobile.ui.account.models.AccountUi
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 data class MyAccountsUiState(
@@ -21,7 +19,9 @@ data class MyAccountsUiState(
     val customerMissing: Boolean = false,
     val customerMessage: String? = null
 )
-class MyAccountsViewModel(
+
+@HiltViewModel
+class MyAccountsViewModel @Inject constructor(
     private val repo: AccountRepository,
     private val defaults: DefaultAccountStore
 ) : ViewModel() {
@@ -45,13 +45,7 @@ class MyAccountsViewModel(
                 val list = repo.getMyAccounts().map { it.toUi() }
                 _ui.update { it.copy(loading = false, accounts = list) }
             } catch (e: CustomerMissingException) {
-                _ui.update {
-                    it.copy(
-                        loading = false,
-                        customerMissing = true,
-                        customerMessage = e.message
-                    )
-                }
+                _ui.update { it.copy(loading = false, customerMissing = true, customerMessage = e.message) }
             } catch (e: Exception) {
                 _ui.update { it.copy(loading = false, error = e.message ?: "Failed to load accounts") }
             }
@@ -59,17 +53,6 @@ class MyAccountsViewModel(
     }
 
     fun setDefault(id: String) {
-        viewModelScope.launch {
-            defaults.setDefaultAccountId(id)
-        }
+        viewModelScope.launch { defaults.setDefaultAccountId(id) }
     }
-}
-
-class MyAccountsVMFactory(
-    private val repo: AccountRepository,
-    private val defaults: DefaultAccountStore
-) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T =
-        MyAccountsViewModel(repo, defaults) as T
 }

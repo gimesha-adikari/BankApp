@@ -9,9 +9,10 @@ import com.bankingsystem.mobile.data.service.ApiService
 import com.bankingsystem.mobile.data.storage.TokenManager
 import retrofit2.HttpException
 import java.io.IOException
+import javax.inject.Inject
 
-class UserRepository(
-    private val apiService: ApiService = RetrofitClient.apiService,
+class UserRepository @Inject constructor(
+    private val apiService: ApiService,
     private val tokenManager: TokenManager
 ) {
 
