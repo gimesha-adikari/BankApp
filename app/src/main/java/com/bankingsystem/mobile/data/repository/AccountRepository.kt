@@ -13,7 +13,7 @@ import org.json.JSONObject
 import retrofit2.HttpException
 
 class AccountRepository @Inject constructor(
-    private val api: ApiService       // <-- no default value here
+    private val api: ApiService
 ) {
 
     suspend fun getBranches(): List<BranchNet> = ioWrap { api.getBranches() }

@@ -20,7 +20,7 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun AnimatedSplashScreen(onTimeout: () -> Unit) {
-    val scale = remember { Animatable(0.8f) } // Initial scale value
+    val scale = remember { Animatable(0.8f) }
     LaunchedEffect(Unit) {
         scale.animateTo(
             targetValue = 1.2f,
@@ -36,7 +36,6 @@ fun AnimatedSplashScreen(onTimeout: () -> Unit) {
 
     Box(
         modifier = Modifier.fillMaxSize(),
-        // Center the content within the Box
         contentAlignment = Alignment.Center
     ) {
         Image(

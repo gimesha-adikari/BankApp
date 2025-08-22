@@ -13,6 +13,7 @@ object Routes {
     const val ACCOUNT_TX    = "accounts/tx/{accountId}?accNo={accNo}"
 
     const val KYC = "kyc"
+    const val KYC_STATUS = "kyc/status"
 
     fun accountTx(accountId: String, accountNumber: String? = null): String {
         val accNo = accountNumber?.let { Uri.encode(it) } ?: ""

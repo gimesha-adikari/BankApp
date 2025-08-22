@@ -42,8 +42,8 @@ fun Sidebar(
         "My Accounts" to Icons.Filled.AccountBalance,
         "Open Account" to Icons.Filled.AddCircle,
         "Payments" to Icons.Filled.Payment,
-        // 🔹 New entry
         "Verify Identity" to Icons.Filled.Verified,
+        "KYC Status" to Icons.Filled.Verified,
         "Profile" to Icons.Filled.Person,
         "Settings" to Icons.Filled.Settings,
         "Logout" to Icons.AutoMirrored.Filled.ExitToApp

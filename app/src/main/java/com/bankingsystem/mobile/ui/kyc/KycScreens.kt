@@ -47,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -236,6 +237,7 @@ private fun DocSlot(
     }
 }
 
+@Suppress("OPT_IN_ARGUMENT_IS_NOT_MARKER")
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalGetImage::class)
 @Composable
@@ -250,6 +252,13 @@ fun SelfieLivenessScreen(
 ) {
     val ctx = LocalContext.current
     val owner = LocalLifecycleOwner.current
+
+    // --- NEW: keep refs so we can unbind on dispose ---
+    var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+    var boundPreview by remember { mutableStateOf<Preview?>(null) }
+    var boundImageCapture by remember { mutableStateOf<ImageCapture?>(null) }
+    var boundAnalysis by remember { mutableStateOf<ImageAnalysis?>(null) }
+
     var error by remember { mutableStateOf<String?>(null) }
     var progress by remember { mutableFloatStateOf(0f) }
     var capturing by remember { mutableStateOf(false) }
@@ -266,6 +275,7 @@ fun SelfieLivenessScreen(
     var lastRightOpen by remember { mutableStateOf<Boolean?>(null) }
     var blinked by remember { mutableStateOf(false) }
     val yawWindow = remember { ArrayDeque<Float>() }
+
     val previewView = remember(ctx) { PreviewView(ctx).apply { scaleType = PreviewView.ScaleType.FIT_CENTER } }
     val imageCapture = remember {
         ImageCapture.Builder()
@@ -282,24 +292,27 @@ fun SelfieLivenessScreen(
                 .build()
         )
     }
+
     LaunchedEffect(owner) {
         try {
-            val provider = withContext(Dispatchers.Default) {
-                ProcessCameraProvider.getInstance(ctx).get()
-            }
+            val provider = withContext(Dispatchers.Default) { ProcessCameraProvider.getInstance(ctx).get() }
+            cameraProvider = provider
+
             val front = CameraSelector.DEFAULT_FRONT_CAMERA
-            val back = CameraSelector.DEFAULT_BACK_CAMERA
+            val back  = CameraSelector.DEFAULT_BACK_CAMERA
             val selector = if (provider.hasCameraSafe(front)) front else back
             if (!provider.hasCameraSafe(selector)) {
                 error = "No available camera can be found"
                 return@LaunchedEffect
             }
+
             val rotation = previewView.display?.rotation ?: Surface.ROTATION_0
             val preview = Preview.Builder()
                 .setTargetAspectRatio(AspectRatio.RATIO_16_9)
                 .setTargetRotation(rotation)
                 .build()
                 .also { it.setSurfaceProvider(previewView.surfaceProvider) }
+
             val mainExec = ContextCompat.getMainExecutor(ctx)
 
             val analyzer = ImageAnalysis.Analyzer { proxy ->
@@ -313,7 +326,7 @@ fun SelfieLivenessScreen(
                             val h = image.height.toFloat()
                             val cx = f.boundingBox.centerX() / w
                             val cy = f.boundingBox.centerY() / h
-                            val centered = abs(cx - 0.5f) < centerTolX && abs(cy - 0.5f) < centerTolY
+                            val centered = kotlin.math.abs(cx - 0.5f) < centerTolX && kotlin.math.abs(cy - 0.5f) < centerTolY
                             centeredFrames = if (centered) (centeredFrames + 1).coerceAtMost(60) else (centeredFrames - 2).coerceAtLeast(0)
                             val centerOk = centeredFrames >= needCenteredFrames
 
@@ -374,11 +387,50 @@ fun SelfieLivenessScreen(
 
             provider.unbindAll()
             provider.bindToLifecycle(owner, selector, preview, imageCapture, analysis)
+
+            // remember bound use cases for cleanup
+            boundPreview = preview
+            boundImageCapture = imageCapture
+            boundAnalysis = analysis
+
             error = null
         } catch (e: Exception) {
             error = e.message ?: "Failed to start camera"
         }
     }
+
+    // --- NEW: clean up when leaving composition / owner changes / app goes background ---
+    DisposableEffect(owner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                cameraProvider?.let { prov ->
+                    boundAnalysis?.clearAnalyzer()
+                    runCatching { prov.unbindAll() }
+                }
+            }
+        }
+        owner.lifecycle.addObserver(obs)
+
+        onDispose {
+            owner.lifecycle.removeObserver(obs)
+            boundAnalysis?.clearAnalyzer()
+
+            detector.close()
+
+            cameraProvider?.let { prov ->
+                val useCases = listOfNotNull(boundPreview, boundImageCapture, boundAnalysis).toTypedArray()
+                runCatching {
+                    if (useCases.isNotEmpty()) prov.unbind(*useCases) else prov.unbindAll()
+                }
+            }
+
+            boundPreview = null
+            boundImageCapture = null
+            boundAnalysis = null
+            cameraProvider = null
+        }
+    }
+
 
     KycScaffold(
         title = "Face verification",
@@ -430,6 +482,7 @@ fun SelfieLivenessScreen(
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

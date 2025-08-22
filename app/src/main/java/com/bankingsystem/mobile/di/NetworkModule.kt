@@ -21,8 +21,10 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
+import java.util.concurrent.TimeUnit
 
 
 @Module
@@ -79,7 +81,19 @@ object NetworkModule {
         unauthorizedHandler: UnauthorizedHandler
     ): OkHttpClient =
         OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
             .addInterceptor(AuthInterceptor(authStore, unauthorizedHandler))
+            .addInterceptor(
+                HttpLoggingInterceptor().apply {
+                    level = if (BuildConfig.DEBUG)
+                        HttpLoggingInterceptor.Level.BASIC
+                    else
+                        HttpLoggingInterceptor.Level.NONE
+                }
+            )
             .build()
 
 

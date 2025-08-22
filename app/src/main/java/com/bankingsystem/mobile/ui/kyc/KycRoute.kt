@@ -6,6 +6,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.bankingsystem.mobile.ui.navigation.Routes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -48,21 +50,29 @@ fun KycRoute(
 
     LaunchedEffect(ui.docFront, ui.docBack) {
         val q = withContext(Dispatchers.Default) {
-            val fronts = ui.docFront?.let { uri ->
-                decodeBitmapForAnalyze(ctx, uri)?.let { computeDocQuality(it) }
-            }
-            val backs = ui.docBack?.let { uri ->
-                decodeBitmapForAnalyze(ctx, uri)?.let { computeDocQuality(it) }
-            }
+            val fronts =
+                ui.docFront?.let { decodeBitmapForAnalyze(ctx, it)?.let(::computeDocQuality) }
+            val backs =
+                ui.docBack?.let { decodeBitmapForAnalyze(ctx, it)?.let(::computeDocQuality) }
             if (fronts == null && backs == null) null
             else DocQuality(
                 blurScore = listOfNotNull(fronts?.blurScore, backs?.blurScore).minOrNull(),
                 glareScore = listOfNotNull(fronts?.glareScore, backs?.glareScore).minOrNull(),
-                cornerCoverage = listOfNotNull(fronts?.cornerCoverage, backs?.cornerCoverage).minOrNull()
+                cornerCoverage = listOfNotNull(
+                    fronts?.cornerCoverage,
+                    backs?.cornerCoverage
+                ).minOrNull()
             )
         }
-        if (q == null) vm.setDocQuality(DocQuality()) else vm.setDocQuality(q)
+        vm.setDocQuality(q ?: DocQuality())
+        val d = q ?: DocQuality()
+        Log.d(
+            "KYC",
+            "docFront=${ui.docFront != null}, docBack=${ui.docBack != null}, " +
+                    "blur=${d.blurScore}, glare=${d.glareScore}, corners=${d.cornerCoverage}"
+        )
     }
+
 
     var showChooser by remember { mutableStateOf(false) }
     var target by remember { mutableStateOf(PickTarget.NONE) }
@@ -83,6 +93,7 @@ fun KycRoute(
                     vm.setLiveness(0.9f)
                     vm.setFaceMatch(0.9f)
                 }
+
                 PickTarget.ADDRESS -> vm.setAddressProof(pendingCameraUri)
                 else -> {}
             }
@@ -103,6 +114,7 @@ fun KycRoute(
                 vm.setLiveness(0.9f)
                 vm.setFaceMatch(0.9f)
             }
+
             PickTarget.ADDRESS -> vm.setAddressProof(uri)
             else -> {}
         }
@@ -127,7 +139,10 @@ fun KycRoute(
         val uri = createTempImageUri(local)
         pendingCameraUri = uri
         pendingCameraTarget = which
-        val granted = ContextCompat.checkSelfPermission(local, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        val granted = ContextCompat.checkSelfPermission(
+            local,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
         if (granted) takePicture.launch(uri) else requestCameraPerm.launch(Manifest.permission.CAMERA)
     }
 
@@ -149,6 +164,7 @@ fun KycRoute(
                 onNext = { if (DEV_PREVIEW || vm.canContinueFromDocument()) vm.next() },
                 canContinue = !uploading && (DEV_PREVIEW || vm.canContinueFromDocument())
             )
+
             KycStep.Selfie -> SelfieLivenessScreen(
                 onBack = { vm.back() },
                 onNext = { if (DEV_PREVIEW || vm.canContinueFromSelfie()) vm.next() },
@@ -162,6 +178,7 @@ fun KycRoute(
                     vm.setFaceMatch(0.9f)
                 }
             )
+
             KycStep.Address -> AddressProofScreen(
                 proofUri = ui.addressProof,
                 onCapture = { target = PickTarget.ADDRESS; showChooser = true },
@@ -171,12 +188,15 @@ fun KycRoute(
                 onNext = { if (DEV_PREVIEW || vm.canContinueFromAddress()) vm.next() },
                 canContinue = !uploading && (DEV_PREVIEW || vm.canContinueFromAddress())
             )
+
             KycStep.Review -> KycReviewScreen(
                 onBack = { vm.back() },
                 onSubmit = {
+                    Log.d("KYC", "Review: onSubmit tapped")
                     scope.launch {
                         val ok = vm.submit()
-                        if (ok) onNavigate("Home")
+                        Log.d("KYC", "Review: submit() returned ok=$ok")
+                        if (ok) onNavigate(Routes.KYC_STATUS)else onNavigate(Routes.HOME)
                     }
                 },
                 canSubmit = !uploading && vm.readyToSubmit(),

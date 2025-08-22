@@ -1,0 +1,1240 @@
+package com.bankingsystem.core.features.kyc.interfaces;
+
+import com.bankingsystem.core.features.kyc.application.KycAutoReviewOrchestrator;
+import com.bankingsystem.core.features.kyc.domain.KycCase;
+import com.bankingsystem.core.features.kyc.interfaces.dto.KycCaseResponse;
+import com.bankingsystem.core.features.kyc.interfaces.dto.KycSubmitRequest;
+import com.bankingsystem.core.features.kyc.interfaces.dto.KycSubmitResponse;
+import com.bankingsystem.core.modules.common.security.CurrentUserService;
+import com.bankingsystem.core.features.kyc.application.KycCaseService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/kyc")
+public class KycCaseController {
+
+    private static final Logger log = LoggerFactory.getLogger(KycCaseController.class);
+    private final KycCaseService service;
+    private final CurrentUserService currentUserService;
+    private final KycAutoReviewOrchestrator orchestrator;
+
+    public KycCaseController(KycCaseService service, CurrentUserService currentUserService, KycAutoReviewOrchestrator orchestrator) {
+        this.service = service;
+        this.currentUserService = currentUserService;
+        this.orchestrator = orchestrator;
+    }
+
+    @PostMapping("/submit")
+    public KycSubmitResponse submit(@RequestBody KycSubmitRequest req, Authentication auth) {
+        if (!req.isConsent()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Consent required");
+        }
+        UUID userId = currentUserService.requireUserId(auth);
+        KycCase saved = service.submit(userId, req.getDocFrontId(), req.getDocBackId(), req.getSelfieId(), req.getAddressId());
+        try {
+            saved = orchestrator.run(saved.getId());
+        } catch (Exception ex) {
+            // let it pass — user can poll /kyc/me; reviewers see a KycCheck(type=ERROR)
+        }
+
+        return new KycSubmitResponse(saved.getStatus().name(), saved.getId());
+    }
+
+    @GetMapping("/me")
+    public KycCaseResponse me(Authentication auth) {
+        UUID userId = currentUserService.requireUserId(auth);
+        KycCase c = service.getMyLatest(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No case"));
+        return KycCaseResponse.from(c);
+    }
+}
+package com.bankingsystem.core.features.kyc.interfaces;
+
+import com.bankingsystem.core.features.kyc.domain.KycUpload;
+import com.bankingsystem.core.features.kyc.domain.repository.KycUploadRepository;
+import com.bankingsystem.core.modules.common.security.CurrentUserService;
+import com.bankingsystem.core.modules.common.support.storage.FileStorageService;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.springframework.http.HttpStatus.*;
+
+@RestController
+@RequestMapping("/kyc")
+public class KycFileController {
+
+    private final KycUploadRepository uploads;
+    private final FileStorageService files;
+    private final CurrentUserService currentUser;
+
+    public KycFileController(KycUploadRepository uploads, FileStorageService files, CurrentUserService currentUser) {
+        this.uploads = uploads;
+        this.files = files;
+        this.currentUser = currentUser;
+    }
+
+    @GetMapping("/file/{id}")
+    public ResponseEntity<ByteArrayResource> get(@PathVariable("id") UUID id, Authentication auth) {
+        var who = currentUser.requireUserId(auth);
+        KycUpload u = uploads.findById(id).orElseThrow(() -> new ResponseStatusException(NOT_FOUND));
+
+        boolean isOwner = who.equals(u.getUploadedBy());
+        boolean isAdmin = auth.getAuthorities().stream().anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+        if (!isOwner && !isAdmin) throw new ResponseStatusException(FORBIDDEN);
+
+        byte[] bytes = files.read(id);
+        String ct = Optional.ofNullable(u.getContentType()).orElse("application/octet-stream");
+        String name = Optional.ofNullable(u.getOriginalFilename()).orElse(id.toString());
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(ct))
+                .header("Content-Disposition", "inline; filename=\"" + name.replace("\"","") + "\"")
+                .body(new ByteArrayResource(bytes));
+    }
+}
+package com.bankingsystem.core.features.kyc.interfaces;
+
+import com.bankingsystem.core.features.kyc.domain.KycCase;
+import com.bankingsystem.core.features.kyc.interfaces.dto.KycCaseResponse;
+import com.bankingsystem.core.features.kyc.interfaces.dto.KycDecisionRequest;
+import com.bankingsystem.core.features.kyc.interfaces.dto.PageResponse;
+import com.bankingsystem.core.features.kyc.application.KycCaseService;
+import com.bankingsystem.core.modules.common.enums.KycStatus;
+import com.bankingsystem.core.modules.common.security.CurrentUserService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.stream.Collectors;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/admin/kyc")
+@PreAuthorize("hasRole('ADMIN')")
+public class KycReviewController {
+
+    private final KycCaseService service;
+    private final CurrentUserService currentUserService;
+
+    public KycReviewController(KycCaseService service, CurrentUserService currentUserService) {
+        this.service = service;
+        this.currentUserService = currentUserService;
+    }
+
+    @GetMapping
+    public PageResponse<KycCaseResponse> list(@RequestParam(defaultValue = "PENDING") String status,
+                                              @RequestParam(defaultValue = "0") int page,
+                                              @RequestParam(defaultValue = "20") int size) {
+        KycStatus st = KycStatus.valueOf(status.toUpperCase());
+        Page<KycCase> p = service.listByStatus(st, PageRequest.of(page, size));
+        return new PageResponse<>(
+                page,
+                size,
+                p.getTotalElements(),
+                p.getContent().stream().map(KycCaseResponse::from).collect(Collectors.toList())
+        );
+    }
+
+    @PostMapping("/{id}/decision")
+    public KycCaseResponse decide(@PathVariable String id, @RequestBody KycDecisionRequest req, Authentication auth) {
+        KycStatus target = KycStatus.valueOf(req.getDecision().toUpperCase());
+        UUID reviewer = currentUserService.requireUserId(auth);
+        return KycCaseResponse.from(service.decide(id, target, req.getReason(), reviewer));
+    }
+}
+package com.bankingsystem.core.features.kyc.interfaces;
+
+import com.bankingsystem.core.modules.common.security.CurrentUserService;
+import com.bankingsystem.core.modules.common.support.storage.FileStorageService;
+import com.bankingsystem.core.features.kyc.interfaces.dto.KycUploadResponse;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/kyc")
+public class KycUploadController {
+
+    private static final Set<String> ALLOWED_TYPES = Set.of("DOC_FRONT", "DOC_BACK", "SELFIE", "ADDRESS_PROOF");
+
+    private final FileStorageService storage;
+    private final CurrentUserService currentUser;
+
+    public KycUploadController(FileStorageService storage, CurrentUserService currentUser) {
+        this.storage = storage;
+        this.currentUser = currentUser;
+    }
+
+    @PostMapping(path = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public KycUploadResponse upload(
+            @RequestPart("file") MultipartFile file,
+            @RequestPart("type") String type,
+            Authentication auth
+    ) {
+        if (auth == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+
+        if (!ALLOWED_TYPES.contains(type)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid type");
+        }
+
+        long max = 10L * 1024 * 1024;
+        if (file.getSize() > max) {
+            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Max 10MB");
+        }
+
+        String ct = Optional.ofNullable(file.getContentType()).orElse("").toLowerCase();
+        if (!(ct.equals("image/jpeg") || ct.equals("image/png") || ct.equals("image/webp"))) {
+            throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "jpeg/png/webp only");
+        }
+
+        UUID who = currentUser.requireUserId(auth);
+        var stored = storage.store(file, type, who);
+        return new KycUploadResponse(stored.id());
+    }
+}
+package com.bankingsystem.core.features.kyc.interfaces.dto;
+
+import com.bankingsystem.core.features.kyc.domain.KycCase;
+
+import java.time.Instant;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class KycCaseResponse {
+    private String caseId;
+    private String status;
+    private String docFrontId;
+    private String docBackId;
+    private String selfieId;
+    private String addressId;
+    private String decisionReason;
+    private Instant createdAt;
+    private Instant updatedAt;
+    private String reviewerId;
+    private Instant decidedAt;
+    private String reviewerNotes;
+
+    public static KycCaseResponse from(KycCase c) {
+        KycCaseResponse r = new KycCaseResponse();
+        r.caseId = c.getId();
+        r.status = c.getStatus().name();
+        r.docFrontId = c.getDocFrontId();
+        r.docBackId = c.getDocBackId();
+        r.selfieId = c.getSelfieId();
+        r.addressId = c.getAddressId();
+        r.decisionReason = c.getDecisionReason();
+        r.createdAt = c.getCreatedAt();
+        r.updatedAt = c.getUpdatedAt();
+        r.reviewerId = c.getReviewedBy() != null ? c.getReviewedBy().toString() : null;
+        r.decidedAt = c.getDecidedAt();
+        r.reviewerNotes = c.getReviewerNotes();
+        return r;
+    }
+}
+package com.bankingsystem.core.features.kyc.interfaces.dto;
+
+public class KycDecisionRequest {
+    private String decision; // APPROVED or REJECTED
+    private String reason;
+
+    public String getDecision() { return decision; }
+    public void setDecision(String decision) { this.decision = decision; }
+    public String getReason() { return reason; }
+    public void setReason(String reason) { this.reason = reason; }
+}
+package com.bankingsystem.core.features.kyc.interfaces.dto;
+
+public class KycStatusResponse {
+    private String requestId;
+    private String status;
+    public KycStatusResponse() {}
+    public KycStatusResponse(String requestId, String status) {
+        this.requestId = requestId; this.status = status;
+    }
+    public String getRequestId() { return requestId; }
+    public void setRequestId(String requestId) { this.requestId = requestId; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+}
+package com.bankingsystem.core.features.kyc.interfaces.dto;
+
+public class KycSubmitRequest {
+    private String docFrontId;
+    private String docBackId;
+    private String selfieId;
+    private String addressId;
+    private boolean consent;
+
+    public String getDocFrontId() { return docFrontId; }
+    public void setDocFrontId(String docFrontId) { this.docFrontId = docFrontId; }
+    public String getDocBackId() { return docBackId; }
+    public void setDocBackId(String docBackId) { this.docBackId = docBackId; }
+    public String getSelfieId() { return selfieId; }
+    public void setSelfieId(String selfieId) { this.selfieId = selfieId; }
+    public String getAddressId() { return addressId; }
+    public void setAddressId(String addressId) { this.addressId = addressId; }
+    public boolean isConsent() { return consent; }
+    public void setConsent(boolean consent) { this.consent = consent; }
+}
+package com.bankingsystem.core.features.kyc.interfaces.dto;
+
+public class KycSubmitResponse {
+    private String status;   // e.g., PENDING
+    private String requestId;
+
+    public KycSubmitResponse() {}
+    public KycSubmitResponse(String status, String requestId) {
+        this.status = status;
+        this.requestId = requestId;
+    }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public String getRequestId() { return requestId; }
+    public void setRequestId(String requestId) { this.requestId = requestId; }
+}
+package com.bankingsystem.core.features.kyc.interfaces.dto;
+
+public class KycUploadResponse {
+    private String id;
+    public KycUploadResponse() {}
+    public KycUploadResponse(String id) { this.id = id; }
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
+}
+package com.bankingsystem.core.features.kyc.interfaces.dto;
+
+import java.util.List;
+
+public class PageResponse<T> {
+    private int page;
+    private int size;
+    private long total;
+    private List<T> content;
+
+    public PageResponse() {}
+
+    public PageResponse(int page, int size, long total, List<T> content) {
+        this.page = page;
+        this.size = size;
+        this.total = total;
+        this.content = content;
+    }
+    public int getPage() { return page; }
+    public void setPage(int page) { this.page = page; }
+    public int getSize() { return size; }
+    public void setSize(int size) { this.size = size; }
+    public long getTotal() { return total; }
+    public void setTotal(long total) { this.total = total; }
+    public List<T> getContent() { return content; }
+    public void setContent(List<T> content) { this.content = content; }
+}
+package com.bankingsystem.core.features.kyc.application;
+
+import com.bankingsystem.core.features.kyc.domain.KycCase;
+
+public interface KycAutoReviewOrchestrator {
+
+    /**
+     * Run ML auto-review for a single case and return the updated case.
+     */
+    KycCase run(String caseId);
+
+    /**
+     * Periodic batch processor (scheduled in the impl).
+     */
+    void runBatch();
+}
+package com.bankingsystem.core.features.kyc.application.impl;
+
+import com.bankingsystem.core.features.kyc.application.KycAutoReviewOrchestrator;
+import com.bankingsystem.core.features.kyc.application.KycCaseService;
+import com.bankingsystem.core.features.kyc.domain.KycCase;
+import com.bankingsystem.core.features.kyc.domain.KycCheck;
+import com.bankingsystem.core.features.kyc.domain.repository.KycCaseRepository;
+import com.bankingsystem.core.features.kyc.domain.repository.KycCheckRepository;
+import com.bankingsystem.core.features.kyc.domain.repository.KycUploadRepository;
+import com.bankingsystem.core.features.kyc.integration.MlKycClient;
+import com.bankingsystem.core.modules.common.enums.KycStatus;
+import com.bankingsystem.core.modules.common.support.storage.FileStorageService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import java.time.Instant;
+import java.util.*;
+import java.util.Base64;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@Service
+public class KycAutoReviewOrchestratorImpl implements KycAutoReviewOrchestrator {
+
+    private static final Logger log = LoggerFactory.getLogger(KycAutoReviewOrchestratorImpl.class);
+    private static final UUID SYSTEM_REVIEWER = new UUID(0L, 0L); // 0000... as "SYSTEM"
+
+    private final KycCaseRepository cases;
+    private final KycCheckRepository checks;
+    private final KycUploadRepository uploads;
+    private final FileStorageService files;
+    private final KycCaseService caseService;
+    private final MlKycClient ml;
+    private final ObjectMapper mapper;
+
+    public KycAutoReviewOrchestratorImpl(
+            KycCaseRepository cases,
+            KycCheckRepository checks,
+            KycUploadRepository uploads,
+            FileStorageService files,
+            KycCaseService caseService,
+            MlKycClient ml,
+            ObjectMapper mapper
+    ) {
+        this.cases = cases;
+        this.checks = checks;
+        this.uploads = uploads;
+        this.files = files;
+        this.caseService = caseService;
+        this.ml = ml;
+        this.mapper = mapper;
+    }
+
+    /** Runs every 10s; processes up to 50 oldest eligible cases. */
+    @Override
+    @Scheduled(fixedDelayString = "${kyc.auto-review.fixed-delay-ms:10000}")
+    @Transactional
+    public void runBatch() {
+        var candidates = cases.findCandidatesForAutoReview(
+                List.of(KycStatus.PENDING),
+                PageRequest.of(0, 50)
+        );
+
+        for (KycCase c : candidates) {
+            if (cases.tryMarkProcessing(c.getId()) == 1) {
+                try {
+                    run(c.getId());
+                } catch (Exception ex) {
+                    log.error("Failed to process KYC case {}: {}", c.getId(), ex.getMessage(), ex);
+                    try {
+                        caseService.markStatus(c.getId(), KycStatus.UNDER_REVIEW, "Auto-review failed: " + ex.getMessage());
+                    } catch (Exception e) {
+                        log.error("Failed to mark case {} as failed: {}", c.getId(), e.getMessage(), e);
+                    }
+                }
+            }
+        }
+    }
+
+
+    @Override
+    @Transactional
+    public KycCase run(String caseId) {
+        KycCase c = cases.findById(caseId)
+                .orElseThrow(() -> new IllegalArgumentException("Case not found: " + caseId));
+
+        // If not already claimed, try to claim now (covers direct/manual invocations)
+        if (!c.isProcessing()) {
+            if (cases.tryMarkProcessing(c.getId()) != 1) {
+                return c; // someone else is handling it
+            }
+            c.setProcessing(true);
+        }
+
+        switch (c.getStatus()) {
+            case PENDING -> caseService.markStatus(c.getId(), KycStatus.AUTO_REVIEW, "Automation started");
+            case AUTO_REVIEW -> { /* continue */ }
+            default -> {
+                c.setProcessing(false);
+                cases.save(c);
+                return c;
+            }
+        }
+
+        // build base64 payloads (as you had)
+        String selfieB64 = readB64(c.getSelfieId());
+        String frontB64  = readB64(c.getDocFrontId());
+        String backB64   = readB64(c.getDocBackId());
+        MlKycClient.KycAggregateRequest req = new MlKycClient.KycAggregateRequest(
+                selfieB64, null, frontB64, backB64, Map.of()
+        );
+
+        try {
+            var res = ml.aggregate(req);
+
+            if (res.body != null && res.body.checks != null) {
+                Instant now = Instant.now();
+                for (var chk : res.body.checks) {
+                    KycCheck k = new KycCheck();
+                    k.setCaseId(c.getId());
+                    k.setType(chk.type);
+                    k.setScore(chk.score);
+                    k.setPassed(chk.passed);
+                    k.setDetailsJson(toJsonSafe(chk.details));
+                    k.setCreatedAt(now);
+                    checks.save(k);
+                }
+            }
+
+            var reasons = new ArrayList<String>();
+            if (res.body != null && res.body.reasons != null) reasons.addAll(res.body.reasons);
+            String reasonStr = String.join(";", reasons);
+            String decision = (res.body != null && res.body.decision != null) ? res.body.decision : "UNDER_REVIEW";
+
+            switch (decision) {
+                case "APPROVE" -> caseService.decide(c.getId(), KycStatus.APPROVED, "Auto-approved by ML", SYSTEM_REVIEWER);
+                case "REJECT"  -> caseService.decide(c.getId(), KycStatus.REJECTED, reasonStr.isBlank() ? "Rejected by ML" : reasonStr, SYSTEM_REVIEWER);
+                default        -> caseService.markStatus(c.getId(), KycStatus.UNDER_REVIEW, reasonStr.isBlank() ? "Queued for human review" : reasonStr);
+            }
+        } catch (Exception ex) {
+            KycCheck err = new KycCheck();
+            err.setCaseId(c.getId());
+            err.setType("ERROR");
+            err.setScore(0.0);
+            err.setPassed(false);
+            err.setDetailsJson("{\"error\":\"" + safe(ex.getMessage()) + "\"}");
+            err.setCreatedAt(Instant.now());
+            checks.save(err);
+
+            caseService.markStatus(c.getId(), KycStatus.UNDER_REVIEW, "ml_unavailable");
+        } finally {
+            // always release the claim
+            cases.findById(caseId).ifPresent(k -> {
+                k.setProcessing(false);
+                cases.save(k);
+            });
+        }
+
+        return cases.findById(caseId).orElse(c);
+    }
+
+
+    private String readB64(String uuidStr) {
+        if (uuidStr == null || uuidStr.isBlank()) return null;
+        try {
+            byte[] data = files.read(UUID.fromString(uuidStr));
+            if (data == null || data.length == 0) return null;
+            if (data.length > 6 * 1024 * 1024) return null; // optional cap
+            return Base64.getEncoder().encodeToString(data);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String toJsonSafe(Map<String, Object> map) {
+        try {
+            return mapper.writeValueAsString(map == null ? Map.of() : map);
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    private static String safe(String s) {
+        return s == null ? "" : s.replace("\"", "'");
+    }
+}
+package com.bankingsystem.core.features.kyc.application;
+
+import com.bankingsystem.core.features.kyc.domain.KycCase;
+import com.bankingsystem.core.modules.common.enums.KycStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+import java.util.Optional;
+import java.util.UUID;
+
+public interface KycCaseService {
+    KycCase submit(UUID userId, String docFrontId, String docBackId, String selfieId, String addressId);
+    Optional<KycCase> getMyLatest(UUID userId);
+    Page<KycCase> listByStatus(KycStatus status, Pageable pageable);
+    KycCase decide(String caseId, KycStatus target, String reason, UUID reviewerId);
+    KycCase markStatus(String caseId, KycStatus status, String note);
+}
+package com.bankingsystem.core.features.kyc.application.impl;
+
+import com.bankingsystem.core.features.kyc.application.KycCaseService;
+import com.bankingsystem.core.features.kyc.domain.KycCase;
+import com.bankingsystem.core.features.kyc.domain.KycUpload;
+import com.bankingsystem.core.features.kyc.domain.repository.KycCaseRepository;
+import com.bankingsystem.core.features.kyc.domain.repository.KycUploadRepository;
+import com.bankingsystem.core.modules.common.enums.KycStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+public class KycCaseServiceImpl implements KycCaseService {
+
+    private final KycCaseRepository cases;
+    private final KycUploadRepository uploads;
+
+    public KycCaseServiceImpl(KycCaseRepository cases, KycUploadRepository uploads) {
+        this.cases = cases;
+        this.uploads = uploads;
+    }
+
+    @Override
+    @Transactional
+    public KycCase submit(UUID userId, String docFrontId, String docBackId, String selfieId, String addressId) {
+        // Parse & basic ownership
+        List<UUID> ids = Arrays.asList(
+                UUID.fromString(docFrontId),
+                UUID.fromString(docBackId),
+                UUID.fromString(selfieId),
+                UUID.fromString(addressId)
+        );
+
+        if (new HashSet<>(ids).size() != 4) {
+            throw new IllegalArgumentException("Uploads must be four distinct files");
+        }
+
+        long owned = uploads.countByIdInAndUploadedBy(ids, userId);
+        if (owned != ids.size()) {
+            throw new IllegalArgumentException("Upload IDs invalid or not owned by user");
+        }
+
+        Map<UUID, KycUpload> byId = uploads.findByIdIn(ids).stream()
+                .collect(Collectors.toMap(KycUpload::getId, u -> u));
+
+        requireType(byId, UUID.fromString(docFrontId), "DOC_FRONT", "docFrontId");
+        requireType(byId, UUID.fromString(docBackId), "DOC_BACK", "docBackId");
+        requireType(byId, UUID.fromString(selfieId), "SELFIE", "selfieId");
+        requireType(byId, UUID.fromString(addressId), "ADDRESS_PROOF", "addressId");
+
+        List<KycStatus> active = Arrays.asList(
+                KycStatus.PENDING, KycStatus.AUTO_REVIEW, KycStatus.UNDER_REVIEW, KycStatus.NEEDS_MORE_INFO
+        );
+        KycCase existingActive = cases.findFirstByUserIdAndStatusInOrderByCreatedAtDesc(userId, active).orElse(null);
+
+        KycCase c;
+        if (existingActive == null) {
+            c = new KycCase();
+            c.setUserId(userId);
+            c.setStatus(KycStatus.PENDING);
+            c.setCreatedAt(Instant.now());
+            c.setUpdatedAt(c.getCreatedAt());
+        } else if (existingActive.getStatus() == KycStatus.PENDING || existingActive.getStatus() == KycStatus.NEEDS_MORE_INFO) {
+            c = existingActive;
+        } else {
+            throw new IllegalStateException("An active KYC case already exists with status " + existingActive.getStatus());
+        }
+
+        c.setDocFrontId(docFrontId);
+        c.setDocBackId(docBackId);
+        c.setSelfieId(selfieId);
+        c.setAddressId(addressId);
+        c.setDecisionReason(null);
+        c.setReviewerNotes(null);
+        c.setReviewedBy(null);
+        c.setDecidedAt(null);
+
+        return cases.save(c);
+    }
+
+    private static void requireType(Map<UUID, KycUpload> map, UUID id, String expectedType, String fieldName) {
+        KycUpload u = map.get(id);
+        if (u == null) throw new IllegalArgumentException("Missing upload for " + fieldName);
+        if (!expectedType.equalsIgnoreCase(u.getType())) {
+            throw new IllegalArgumentException(fieldName + " type mismatch: expected " + expectedType + " but was " + u.getType());
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<KycCase> getMyLatest(UUID userId) {
+        return cases.findTopByUserIdOrderByCreatedAtDesc(userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<KycCase> listByStatus(KycStatus status, Pageable pageable) {
+        return cases.findAllByStatus(status, pageable);
+    }
+
+    @Override
+    @Transactional
+    public KycCase decide(String caseId, KycStatus target, String reason, UUID reviewerId) {
+        if (!(target == KycStatus.APPROVED || target == KycStatus.REJECTED || target == KycStatus.NEEDS_MORE_INFO)) {
+            throw new IllegalArgumentException("Decision must be APPROVED, REJECTED or NEEDS_MORE_INFO");
+        }
+        KycCase c = cases.findById(caseId).orElseThrow(() -> new IllegalArgumentException("Case not found"));
+        if (!c.getStatus().canTransitionTo(target)) {
+            throw new IllegalArgumentException("Illegal transition from " + c.getStatus() + " to " + target);
+        }
+
+        c.setStatus(target);
+        c.setDecisionReason(reason);
+        c.setReviewerNotes(reason);
+        c.setReviewedBy(reviewerId);
+        c.setDecidedAt(Instant.now());
+        c.setUpdatedAt(Instant.now());
+        return cases.save(c);
+    }
+
+    @Override
+    @Transactional
+    public KycCase markStatus(String caseId, KycStatus status, String note) {
+        KycCase c = cases.findById(caseId).orElseThrow(() -> new IllegalArgumentException("Case not found"));
+
+        if (c.getStatus() == status) {
+            if (note != null && !note.isBlank()) c.setReviewerNotes(note);
+            c.setUpdatedAt(Instant.now());
+            return cases.save(c);
+        }
+        if (!c.getStatus().canTransitionTo(status)) {
+            throw new IllegalArgumentException("Illegal transition from " + c.getStatus() + " to " + status);
+        }
+        c.setStatus(status);
+        c.setUpdatedAt(Instant.now());
+        if (note != null && !note.isBlank()) {
+            c.setReviewerNotes(note);
+        }
+        return cases.save(c);
+    }
+}
+package com.bankingsystem.core.features.kyc.application;
+
+import java.util.Map;
+
+public interface KycService {
+    String handleUploadId(String id);
+    boolean validateRequired(Map<String, String> ids);
+}
+package com.bankingsystem.core.features.kyc.application.impl;
+
+import com.bankingsystem.core.features.kyc.domain.repository.KycUploadRepository;
+import com.bankingsystem.core.features.kyc.application.KycService;
+import org.springframework.stereotype.Service;
+
+import java.util.Map;
+import java.util.UUID;
+
+@Service
+public class KycServiceImpl implements KycService {
+
+    private final KycUploadRepository uploads;
+
+    public KycServiceImpl(KycUploadRepository uploads) {
+        this.uploads = uploads;
+    }
+
+    @Override
+    public String handleUploadId(String id) {
+        return id;
+    }
+
+    @Override
+    public boolean validateRequired(Map<String, String> ids) {
+        if (ids == null) return false;
+        String[] keys = {"doc_front","doc_back","selfie","address"};
+        for (String k : keys) {
+            String v = ids.get(k);
+            if (v == null) return false;
+            try {
+                if (!uploads.existsById(UUID.fromString(v))) return false;
+            } catch (IllegalArgumentException e) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+package com.bankingsystem.core.features.kyc.domain;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.time.Instant;
+import java.util.UUID;
+
+@Getter
+@Setter
+@Entity
+@Table(name = "kyc_uploads",
+        indexes = {
+                @Index(name = "idx_kyc_uploads_uploaded_by", columnList = "uploaded_by"),
+                @Index(name = "idx_kyc_uploads_created_at", columnList = "created_at")
+        })
+public class KycUpload {
+
+    @Id
+    @Column(name = "id", nullable = false, updatable = false, columnDefinition = "BINARY(16)")
+    private UUID id;
+
+    @Column(name = "type", nullable = false, length = 40)
+    private String type; // DOC_FRONT, DOC_BACK, SELFIE, ADDRESS_PROOF
+
+    @Column(name = "original_filename", length = 255)
+    private String originalFilename;
+
+    @Column(name = "stored_filename", nullable = false, length = 255)
+    private String storedFilename;
+
+    @Column(name = "content_type", length = 100)
+    private String contentType;
+
+    @Column(name = "size_bytes", nullable = false)
+    private long sizeBytes;
+
+    @Column(name = "checksum_sha256", length = 64)
+    private String checksumSha256;
+
+    @Column(name = "storage_path", nullable = false, length = 1024)
+    private String storagePath;
+
+    @Column(name = "uploaded_by", nullable = false, columnDefinition = "BINARY(16)")
+    private UUID uploadedBy;
+
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt;
+
+    @PrePersist
+    public void prePersist() {
+        if (id == null) id = UUID.randomUUID();
+        if (createdAt == null) createdAt = Instant.now();
+    }
+}
+package com.bankingsystem.core.features.kyc.domain;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.time.Instant;
+import java.util.UUID;
+
+@Getter
+@Setter
+@Entity
+@Table(name = "kyc_checks",
+        indexes = {
+                @Index(name = "idx_kyc_checks_case", columnList = "case_id"),
+                @Index(name = "idx_kyc_checks_type", columnList = "type")
+        })
+public class KycCheck {
+
+    @Id
+    @Column(length = 36, nullable = false, updatable = false)
+    private String id;
+
+    @Column(name = "case_id", length = 36, nullable = false)
+    private String caseId;
+
+    @Column(nullable = false, length = 40)
+    private String type; // LIVENESS, FACE_MATCH, OCR_ID, DOC_CLASS
+
+    private Double score;           // 0..1
+    private Boolean passed;
+
+    @Lob
+    @Column(name = "details_json", columnDefinition = "TEXT")
+    private String detailsJson;
+
+    @Column(nullable = false)
+    private Instant createdAt;
+
+    @PrePersist
+    public void prePersist() {
+        if (id == null) id = UUID.randomUUID().toString();
+        if (createdAt == null) createdAt = Instant.now();
+    }
+}
+package com.bankingsystem.core.features.kyc.domain;
+
+import com.bankingsystem.core.modules.common.enums.KycStatus;
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.time.Instant;
+import java.util.UUID;
+
+@Getter
+@Setter
+@Entity
+@Table(name = "kyc_cases",
+        indexes = {
+                @Index(name = "idx_kyc_cases_user_id", columnList = "user_id"),
+                @Index(name = "idx_kyc_cases_status", columnList = "status"),
+                @Index(name = "idx_kyc_cases_user_created", columnList = "user_id,created_at")
+        })
+public class KycCase {
+
+    @Id
+    @Column(length = 36, nullable = false, updatable = false)
+    private String id;
+
+    @Column(name = "user_id", nullable = false, columnDefinition = "BINARY(16)")
+    private UUID userId;
+
+    @Column(nullable = false, length = 36)
+    private String docFrontId;
+
+    @Column(nullable = false, length = 36)
+    private String docBackId;
+
+    @Column(nullable = false, length = 36)
+    private String selfieId;
+
+    @Column(nullable = false, length = 36)
+    private String addressId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private KycStatus status;
+
+    @Column(nullable = false)
+    private Instant createdAt;
+
+    @Column(nullable = false)
+    private Instant updatedAt;
+
+    @Column(length = 500)
+    private String decisionReason;
+
+    @Version
+    private long version;
+
+    @Column(name = "reviewed_by", columnDefinition = "BINARY(16)")
+    private UUID reviewedBy;
+
+    private Instant decidedAt;
+
+    @Column(length = 1000)
+    private String reviewerNotes;
+
+    @Column(name = "processing", nullable = false)
+    private boolean processing = false;
+
+    @PrePersist
+    public void prePersist() {
+        if (this.id == null) this.id = UUID.randomUUID().toString();
+        if (this.createdAt == null) this.createdAt = Instant.now();
+        if (this.status == null) this.status = KycStatus.PENDING;
+        this.updatedAt = this.createdAt;
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = Instant.now();
+    }
+}
+package com.bankingsystem.core.features.kyc.domain.repository;
+
+import com.bankingsystem.core.features.kyc.domain.KycUpload;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.UUID;
+
+public interface KycUploadRepository extends JpaRepository<KycUpload, UUID> {
+    long countByIdInAndUploadedBy(Collection<UUID> ids, UUID uploadedBy);
+    List<KycUpload> findByIdIn(Collection<UUID> ids);
+}
+package com.bankingsystem.core.features.kyc.domain.repository;
+
+import com.bankingsystem.core.features.kyc.domain.KycCheck;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+
+public interface KycCheckRepository extends JpaRepository<KycCheck, String> {
+    List<KycCheck> findByCaseId(String caseId);
+}
+package com.bankingsystem.core.features.kyc.domain.repository;
+
+import com.bankingsystem.core.features.kyc.domain.KycCase;
+import com.bankingsystem.core.modules.common.enums.KycStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+public interface KycCaseRepository extends JpaRepository<KycCase, String> {
+    Optional<KycCase> findTopByUserIdOrderByCreatedAtDesc(UUID userId);
+    Optional<KycCase> findByUserIdAndStatus(UUID userId, KycStatus status);
+    Page<KycCase> findAllByStatus(KycStatus status, Pageable pageable);
+    Optional<KycCase> findFirstByUserIdAndStatusInOrderByCreatedAtDesc(UUID userId, Collection<KycStatus> statuses);
+    List<KycCase> findTop50ByStatusOrderByCreatedAtAsc(KycStatus status);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+       update KycCase kc
+          set kc.processing = true
+        where kc.id = :id
+          and kc.processing = false
+       """)
+    int tryMarkProcessing(@Param("id") String id);
+
+    @Query("""
+       select kc from KycCase kc
+        where kc.processing = false
+          and kc.status in :statuses
+        order by kc.createdAt asc
+       """)
+    List<KycCase> findCandidatesForAutoReview(@Param("statuses") List<KycStatus> statuses,
+                                              Pageable page);
+}
+package com.bankingsystem.core.features.kyc.integration;
+
+import io.netty.channel.ChannelOption;
+import io.netty.handler.timeout.ReadTimeoutHandler;
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
+
+@Configuration
+public class MlWebClientConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(MlWebClientConfig.class);
+
+    @Bean
+    public WebClient mlWebClient() {
+        String baseUrl = getenvOr("ML_BASE_URL", "http://127.0.0.1:8000");
+        int connectMs = parseIntOr("ML_CONNECT_TIMEOUT_MS", 1000);
+        int readMs = parseIntOr("ML_READ_TIMEOUT_MS", 30000);
+        int maxMem = parseIntOr("ML_MAX_BODY_BYTES", 20 * 1024 * 1024); // 20MB
+
+        log.info("ML WebClient baseUrl={} connectMs={} readMs={} maxMem={}", baseUrl, connectMs, readMs, maxMem);
+
+        HttpClient http = HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectMs)
+                .responseTimeout(Duration.ofMillis(readMs))
+                .doOnConnected(conn -> conn.addHandlerLast(new ReadTimeoutHandler(readMs, TimeUnit.MILLISECONDS)));
+
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .clientConnector(new ReactorClientHttpConnector(http))
+                .exchangeStrategies(
+                        ExchangeStrategies.builder()
+                                .codecs(cfg -> cfg.defaultCodecs().maxInMemorySize(maxMem))
+                                .build())
+                .build();
+    }
+
+    private static String getenvOr(String k, String def) {
+        String v = System.getenv(k);
+        return (v == null || v.isBlank()) ? def : v;
+    }
+    private static int parseIntOr(String k, int def) {
+        try { return Integer.parseInt(getenvOr(k, String.valueOf(def))); }
+        catch (Exception e) { return def; }
+    }
+}
+package com.bankingsystem.core.features.kyc.integration;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+
+import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
+
+@Component
+public class MlKycClient {
+
+    private static final String PREFIX = "/api/v1/kyc";
+    private final WebClient http;
+
+    public MlKycClient(WebClient mlWebClient) {
+        this.http = mlWebClient;
+    }
+
+    // -------------------------
+    // Aggregate (recommended)
+    // -------------------------
+    public KycAggregateResult aggregate(KycAggregateRequest req) {
+        String idem = UUID.randomUUID().toString();
+
+        ResponseEntity<KycAggregateResponse> ent = http.post()
+                .uri(PREFIX + "/aggregate")
+                .header("X-Idempotency-Key", idem)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(req)
+                .retrieve()
+                .toEntity(KycAggregateResponse.class)
+                // retry ONLY on 5xx/429
+                .retryWhen(Retry.max(2).filter(MlKycClient::isRetryable))
+                .block(Duration.ofSeconds(15));
+
+        String reqId = ent != null ? ent.getHeaders().getFirst("X-Request-ID") : null;
+        KycAggregateResponse body = ent != null ? ent.getBody() : null;
+        return new KycAggregateResult(body, reqId);
+    }
+
+    // ---------------------------------------------------
+    // Simple endpoints (kept for compatibility/debugging)
+    // ---------------------------------------------------
+    public Result faceMatch(byte[] selfie, byte[] docFront) {
+        SimplePayload p = new SimplePayload(selfie, docFront, null, null);
+        return postSimple(PREFIX + "/face/match", p);
+    }
+
+    public Result liveness(byte[] selfie) {
+        SimplePayload p = new SimplePayload(selfie, null, null, null);
+        return postSimple(PREFIX + "/liveness", p);
+    }
+
+    public Result ocrId(byte[] front, byte[] back) {
+        // Python expects docFrontImage/docBackImage here
+        SimplePayload p = new SimplePayload(null, null, front, back);
+        return postSimple(PREFIX + "/ocr/id", p);
+    }
+
+    public Result docClass(byte[] front, byte[] back) {
+        SimplePayload p = new SimplePayload(null, null, front, back);
+        return postSimple(PREFIX + "/doc/class", p);
+    }
+
+    private Result postSimple(String path, SimplePayload payload) {
+        return http.post()
+                .uri(path)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(payload)
+                .retrieve()
+                .bodyToMono(Result.class)
+                .onErrorResume(ex -> Mono.just(Result.failed(errorMsg(ex))))
+                .block(Duration.ofSeconds(15));
+    }
+
+    private static boolean isRetryable(Throwable ex) {
+        if (ex instanceof WebClientResponseException we) {
+            int s = we.getStatusCode().value();
+            return s >= 500 || s == 429;
+        }
+        return true; // network/timeouts
+    }
+
+    private static String errorMsg(Throwable ex) {
+        if (ex instanceof WebClientResponseException we) {
+            return "HTTP " + we.getStatusCode().value() + " - " + we.getResponseBodyAsString();
+        }
+        return ex.getMessage();
+    }
+
+    // -------------------------
+    // DTOs (kept local for now)
+    // -------------------------
+    /** For simple endpoints; Jackson will base64-encode byte[] in JSON. */
+    public record SimplePayload(byte[] selfie, byte[] docFront, byte[] docFrontImage, byte[] docBackImage) {}
+
+    /** Aggregate request DTO matching the Python contract. */
+    public static final class KycAggregateRequest {
+        public String selfie;            // base64 string
+        public String docPortraitImage;  // base64 string (preferred)
+        public String docFrontImage;     // base64 string (optional)
+        public String docBackImage;      // base64 string (optional)
+        public Map<String, String> meta; // e.g., {"countryHint":"LK","docClassHint":"NIC"}
+
+        public KycAggregateRequest() {}
+        public KycAggregateRequest(String selfie, String docPortraitImage, String docFrontImage, String docBackImage, Map<String,String> meta) {
+            this.selfie = selfie;
+            this.docPortraitImage = docPortraitImage;
+            this.docFrontImage = docFrontImage;
+            this.docBackImage = docBackImage;
+            this.meta = meta;
+        }
+    }
+
+    /** Aggregate response pieces. */
+    public static final class Check {
+        public String type;
+        public Double score;
+        public Boolean passed;
+        public Map<String,Object> details;
+        public Check() {}
+    }
+
+    public static final class KycAggregateResponse {
+        public String decision;       // APPROVE | UNDER_REVIEW | REJECT
+        public List<String> reasons;  // e.g. face_match_below_threshold
+        public List<Check> checks;
+        public KycAggregateResponse() {}
+    }
+
+    /** Wrapper so callers get both body + X-Request-ID. */
+    public static final class KycAggregateResult {
+        public final KycAggregateResponse body;
+        public final String requestId;
+        public KycAggregateResult(KycAggregateResponse body, String requestId) {
+            this.body = body;
+            this.requestId = requestId;
+        }
+    }
+
+    /** Simple endpoint result (your existing shape). */
+    public static final class Result {
+        public String type;
+        public Double score;
+        public Boolean passed;
+        public String detailsJson;
+
+        public static Result failed(String message) {
+            Result r = new Result();
+            r.type = "ERROR";
+            r.passed = false;
+            r.score = 0.0;
+            r.detailsJson = "{\"error\":\"" + message.replace("\"","'") + "\"}";
+            return r;
+        }
+    }
+}

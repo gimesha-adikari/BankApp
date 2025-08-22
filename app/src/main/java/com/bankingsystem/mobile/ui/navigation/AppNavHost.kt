@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -16,6 +17,7 @@ import com.bankingsystem.mobile.ui.account.MyAccountsRoute
 import com.bankingsystem.mobile.ui.home.BankHomeRoute
 import com.bankingsystem.mobile.ui.home.BankHomeScreen
 import com.bankingsystem.mobile.ui.kyc.KycRoute
+import com.bankingsystem.mobile.ui.kyc.KycStatusRoute
 import com.bankingsystem.mobile.ui.profile.ProfileRoute
 import com.bankingsystem.mobile.ui.settings.SettingsScreen
 
@@ -97,6 +99,16 @@ fun AppNavHost(
             )
         }
 
+        /* ---------- KYC STATUS---------- */
+        composable(Routes.KYC_STATUS) {
+            KycStatusRoute(
+                userName = userName,
+                selectedItem = "KYC Status",
+                onNavigate = { label -> navigateByLabel(nav, label, onLogout) },
+            )
+        }
+
+
         /* ---------- Payments (placeholder) ---------- */
         composable(Routes.PAYMENTS) {
             BankHomeScreen(
@@ -136,6 +148,7 @@ private fun navigateByLabel(
         "My Accounts" -> Routes.ACCOUNTS_MY
         "Open Account" -> Routes.ACCOUNTS_OPEN
         "Verify Identity", Routes.KYC -> Routes.KYC
+        "KYC Status" -> Routes.KYC_STATUS
         "Logout" -> { onLogout(); return }
         else -> return
     }

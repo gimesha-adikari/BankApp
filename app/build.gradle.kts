@@ -61,12 +61,14 @@ dependencies {
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
+    implementation(libs.androidx.core.splashscreen)
 
     // Compose UI dependencies
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.androidx.ui.text.google.fonts)
+    implementation(libs.androidx.material3)
     debugImplementation(libs.compose.ui.tooling)
     implementation(libs.compose.material3)
     implementation(libs.activity.compose)
@@ -106,6 +108,7 @@ dependencies {
 
     implementation(libs.converter.moshi)
     implementation(libs.moshi.kotlin)
+
 }
 
 kapt { correctErrorTypes = true }

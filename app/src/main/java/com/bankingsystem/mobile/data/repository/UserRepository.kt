@@ -1,6 +1,5 @@
 package com.bankingsystem.mobile.data.repository
 
-import com.bankingsystem.mobile.data.config.RetrofitClient
 import com.bankingsystem.mobile.data.model.RegisterRequest
 import com.bankingsystem.mobile.data.model.ValidateTokenResponse
 import com.bankingsystem.mobile.data.remote.dto.LoginRequest
@@ -46,7 +45,6 @@ class UserRepository @Inject constructor(
         }
     }
 
-    /** Check username availability (200 = available, 409 = taken) */
     suspend fun checkUsernameAvailability(username: String): Boolean {
         if (username.length < 3) return false
         return try {
@@ -62,7 +60,6 @@ class UserRepository @Inject constructor(
         }
     }
 
-    /** Register a new user */
     suspend fun registerUser(username: String, email: String, password: String): Boolean {
         return try {
             val request = RegisterRequest(username, email, password)
@@ -74,7 +71,6 @@ class UserRepository @Inject constructor(
         }
     }
 
-    /** Forgot password */
     suspend fun forgotPassword(email: String): Boolean {
         return try {
             val response = apiService.forgotPassword(email)
@@ -85,7 +81,6 @@ class UserRepository @Inject constructor(
         }
     }
 
-    /** Validate token with header injected by interceptor */
     suspend fun validateToken(): Result<ValidateTokenResponse> {
         return try {
             val response = apiService.validateToken()
@@ -99,6 +94,5 @@ class UserRepository @Inject constructor(
         }
     }
 
-    /** Reactive stream of the current token (if you need it elsewhere) */
     val tokenFlow = tokenManager.tokenFlow
 }

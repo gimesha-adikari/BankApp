@@ -10,4 +10,7 @@ data class KycSubmitBody(
     val consent: Boolean
 )
 
-data class KycSubmitResponse(val status: String)
+data class KycSubmitResponse(
+    val status: String?,
+    val requestId: String? = null
+)

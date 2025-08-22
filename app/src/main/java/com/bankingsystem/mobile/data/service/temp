@@ -1,0 +1,34 @@
+Demo scope
+Which checks must be in the demo flow: Face match, Liveness, OCR, Doc class — all four?
+for now yes but can be added more checks and functions later
+
+Single-country focus (Sri Lankan NIC) or multi-country placeholders?
+for now yes but maybe improve later
+
+Runtime & dependencies
+OK to use PyTorch/ONNX + CUDA if available, or must be CPU-only?
+yes can, i think it can be run on rtx3060
+
+Are OpenCV and Tesseract acceptable? Internet access allowed at runtime (e.g., to download models) or must be fully offline?
+what are those?
+
+Data & privacy
+Do you have any sample images (even anonymized) or should I stick to synthetic fixtures?
+i have no images yet
+
+Should images be discarded after scoring (no disk writes) for the demo?
+the photos only need to be stored until approval or rejection and Spring boot backend would save them until that so no need to save in ML system i think
+
+Performance envelope
+Target inference latency per request and memory budget?
+i have no idea about that yet
+
+Max request size (image resolution/base64 payload limits)?
+currently max is 20 * 1024 * 1024 for per aggregation req
+
+“Success” criteria
+What FAR/FRR tradeoff should we aim to show (e.g., <=1% FAR at ~90% pass on GOOD)?
+at a reasonable level
+
+Any must-have explainable in responses (e.g., portrait bbox, OCR fields, top doc class, decision reasons already present)?
+did not think yet
