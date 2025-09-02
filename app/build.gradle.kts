@@ -18,7 +18,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080/\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://api.gimesha.dev/\"")
         buildConfigField("String", "SUPPORT_EMAIL", "\"support@bankapp.com\"")
         buildConfigField("boolean", "ENABLE_LOGGING", "true")
     }
@@ -69,6 +69,9 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.androidx.ui.text.google.fonts)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.foundation)
+    implementation(libs.androidx.browser)
+    implementation(libs.play.services.mlkit.barcode.scanning)
     debugImplementation(libs.compose.ui.tooling)
     implementation(libs.compose.material3)
     implementation(libs.activity.compose)

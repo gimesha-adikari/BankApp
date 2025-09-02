@@ -1,6 +1,6 @@
 [versions]
 activityKtx = "1.10.1"
-agp = "8.12.1"
+agp = "8.12.2"
 androidxSecurityCrypto = "1.1.0"
 biometric = "1.2.0-alpha05"
 cameraView = "1.4.2"
@@ -30,6 +30,9 @@ retrofit = "3.0.0"
 navigationCompose = "2.8.3"
 navigationComposeVersion = "2.9.3"
 uiTextGoogleFonts = "1.8.3"
+foundation = "1.9.0"
+browser = "1.9.0"
+playServicesMlkitBarcodeScanning = "18.3.1"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -78,3 +81,6 @@ navigation-compose = { module = "androidx.navigation:navigation-compose", versio
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationComposeVersion" }
 androidx-ui-text-google-fonts = { group = "androidx.compose.ui", name = "ui-text-google-fonts", version.ref = "uiTextGoogleFonts" }
 ui-text-google-fonts = { module = "androidx.compose.ui:ui-text-google-fonts" }
+androidx-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
+androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
+play-services-mlkit-barcode-scanning = { group = "com.google.android.gms", name = "play-services-mlkit-barcode-scanning", version.ref = "playServicesMlkitBarcodeScanning" }
