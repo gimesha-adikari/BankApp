@@ -12,8 +12,9 @@ import javax.inject.Singleton
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
-import okio.source
+import java.io.File
 
 @Singleton
 class KycRepositoryImpl @Inject constructor(
@@ -23,19 +24,29 @@ class KycRepositoryImpl @Inject constructor(
 
     private fun requestBodyFromUri(uri: Uri): RequestBody {
         val resolver = ctx.contentResolver
-        val mime = resolver.getType(uri) ?: "image/jpeg"
-        return object : RequestBody() {
-            override fun contentType() = mime.toMediaType()
-            override fun writeTo(sink: okio.BufferedSink) {
-                resolver.openInputStream(uri)?.use { input -> sink.writeAll(input.source()) }
-            }
+        val mime = (resolver.getType(uri) ?: "image/jpeg").lowercase()
+        val ext = when (mime) {
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            else -> "jpg"
         }
+
+        val tmp = File.createTempFile("kyc_", ".$ext", ctx.cacheDir)
+        resolver.openInputStream(uri)?.use { input ->
+            tmp.outputStream().use { out -> input.copyTo(out) }
+        } ?: throw IllegalArgumentException("Cannot open input stream for uri: $uri")
+
+        return tmp.asRequestBody(mime.toMediaType())
     }
 
     private fun partFromUri(uri: Uri, name: String): MultipartBody.Part {
         val resolver = ctx.contentResolver
-        val mime = resolver.getType(uri)?.lowercase() ?: "image/jpeg"
-        val ext = when (mime) { "image/png" -> "png"; "image/webp" -> "webp"; else -> "jpg" }
+        val mime = (resolver.getType(uri) ?: "image/jpeg").lowercase()
+        val ext = when (mime) {
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            else -> "jpg"
+        }
         val body = requestBodyFromUri(uri)
         return MultipartBody.Part.createFormData("file", "$name.$ext", body)
     }
